@@ -21,7 +21,8 @@ jobs:
       - name: Copy files to build directory
         run: |
           cp *.html build/
-          cp *.css build/ || true
+          cp -r css build/ || true
+          cp -r js build/ || true
           cp -r img build/ || true
           
       - name: Create config file with random name
