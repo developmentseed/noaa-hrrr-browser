@@ -207,7 +207,7 @@
         <div id="loading-indicator">Pre-fetching images...</div>
       </div>
     </div>
-    <script src="map-settings.7ec7d5ba55115301.js"></script>
+    <script src="map-settings.6a9557e6f348f08f.js"></script>
     <script>
       // --- Configuration ---
       const TITILER_BASE_URL = "https://raster.eoapi.dev"; // Base URL of your TiTiler instance
@@ -251,7 +251,7 @@
         container: "map",
         style: `https://api.maptiler.com/maps/backdrop/style.json?key=${window.CONFIG.MAPTILER_API_KEY}`,
         center: [-97.5, 40.0],
-        zoom: 3.5,
+        zoom: 3.8,
       });
 
       // --- Get DOM Elements ---
@@ -337,23 +337,73 @@
         }
 
         console.log(`Starting pre-cache for date: ${dateStrYYYYMMDD}`);
+        // Show loading indicator during pre-caching
         loadingIndicator.style.display = "block";
         loadingIndicator.textContent = "Pre-fetching images...";
-        cachedHours.clear(); // Reset cached hours for new date
+
+        // Reset cached hours for new date
+        cachedHours.clear();
 
         // Generate all hour strings and start caching in parallel
+        const cachePromises = [];
         for (let hour = 0; hour <= 23; hour++) {
           const hourStrTXXz = formatHour(hour);
           const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
 
           if (imageUrl) {
-            cacheImage(imageUrl);
-            cachedHours.add(hour);
+            // Use a more controlled caching approach that returns a promise
+            const cachePromise = fetch(imageUrl, {
+              method: "GET",
+              mode: "cors",
+              cache: "default",
+            })
+              .then((response) => {
+                if (response.ok) {
+                  cachedHours.add(hour);
+                  console.log(`Cached hour ${hour}`);
+                }
+                return response;
+              })
+              .catch((error) => {
+                console.warn(`Error pre-caching hour ${hour}:`, error);
+              });
+
+            cachePromises.push(cachePromise);
           }
         }
 
+        // Wait for the first few images to cache before hiding the indicator
+        // This ensures the indicator stays visible during initial caching
+        try {
+          await Promise.race([
+            // Wait for the first few hours to cache
+            Promise.all(cachePromises.slice(0, 3)),
+            // Or a timeout of 3 seconds, whichever comes first
+            new Promise((resolve) => setTimeout(resolve, 3000)),
+          ]);
+        } catch (error) {
+          console.warn("Error during pre-caching:", error);
+        }
+
+        // Hide the loading indicator after initial caching
         loadingIndicator.style.display = "none";
-        console.log("Pre-caching initiated for all hours");
+        console.log("Initial pre-caching completed");
+      }
+
+      /**
+       * Checks if an image is likely cached by the browser
+       */
+      async function isImageCached(url) {
+        try {
+          const cache = await caches.open("hrrr-cache");
+          const cachedResponse = await cache.match(url);
+          return !!cachedResponse;
+        } catch (e) {
+          // If we can't access the Cache API (e.g., in private browsing),
+          // fall back to our tracking set
+          console.warn("Cache API access failed, using tracked cache state");
+          return false;
+        }
       }
 
       /**
@@ -364,10 +414,6 @@
         const hourStrTXXz = formatHour(hourValue);
         hourValueDisplay.textContent = hourStrTXXz;
 
-        // Show loading indicator
-        loadingIndicator.style.display = "block";
-        loadingIndicator.textContent = "Loading...";
-
         // Build the image URL
         const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
 
@@ -377,9 +423,15 @@
           return;
         }
 
-        // If this hour hasn't been cached yet, start caching it
-        if (!cachedHours.has(hourValue)) {
-          cacheImage(imageUrl);
+        // Check if this hour is in our tracked cache
+        const isCached = cachedHours.has(hourValue);
+
+        if (!isCached) {
+          // Show loading indicator for non-cached images
+          loadingIndicator.style.display = "block";
+          loadingIndicator.textContent = "Loading...";
+
+          // Add to our cache tracking
           cachedHours.add(hourValue);
         }
 
@@ -447,7 +499,7 @@
               isLayerInitialized = true;
             }
 
-            // Hide loading indicator
+            // Hide loading indicator once the image is loaded
             loadingIndicator.style.display = "none";
 
             // Clean up the object URL after a delay (to ensure it's been used by MapLibre)
@@ -490,8 +542,17 @@
           const currentHour = parseInt(hourSlider.value, 10);
 
           if (newDate) {
+            // Remove existing layer and source when changing dates
+            if (map.getLayer(HRRR_LAYER_ID)) {
+              map.removeLayer(HRRR_LAYER_ID);
+            }
+            if (map.getSource(HRRR_SOURCE_ID)) {
+              map.removeSource(HRRR_SOURCE_ID);
+              isLayerInitialized = false; // Reset initialization flag
+            }
+
             // Start pre-caching for the new date
-            preCacheImagesForDate(newDate);
+            await preCacheImagesForDate(newDate);
 
             // Display the current hour for the new date
             displayImageForHour(newDate, currentHour);
