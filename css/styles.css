@@ -87,6 +87,34 @@ body,
   color: #0056b3;
 }
 
+/* GitHub Link Style */
+.github-link {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 1;
+  background-color: #fff;
+  border-radius: 4px;
+  padding: 5px 10px;
+  font-size: 12px;
+  text-decoration: none;
+  color: #333;
+  font-family: "Helvetica Neue", Arial, Helvetica, sans-serif;
+  box-shadow: 0 0 0 2px rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.github-link:hover {
+  background-color: #f0f0f0;
+}
+
+.github-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 5px;
+}
 /* Modal Styling */
 .modal {
   display: none;
