@@ -1,10 +1,10 @@
 <!doctype html>
 <html lang="en">
   <head>
-    <title>HRRR Weather Image</title>
+    <title>NOAA HRRR Browser</title>
     <meta
       property="og:description"
-      content="Display HRRR weather data using a cropped PNG image."
+      content="Browse real-time (FH0) reflectivity values from the NOAA HRRR forecast dataset"
     />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -74,6 +74,103 @@
         color: #555;
         display: none; /* Hidden by default */
       }
+      /* Info button styling */
+      .info-button {
+        background: none;
+        border: none;
+        color: #0078ff;
+        font-size: 18px;
+        font-weight: bold;
+        cursor: pointer;
+        position: absolute;
+        right: 10px;
+        top: 10px;
+      }
+
+      .info-button:hover {
+        color: #0056b3;
+      }
+
+      /* Modal styling */
+      .modal {
+        display: none;
+        position: fixed;
+        z-index: 2;
+        left: 0;
+        top: 0;
+        width: 100%;
+        height: 100%;
+        overflow: auto;
+        background-color: rgba(0, 0, 0, 0.5);
+      }
+
+      .modal-content {
+        background-color: #fff;
+        margin: 10% auto;
+        padding: 20px;
+        border-radius: 3px;
+        max-width: 600px;
+        max-height: 80vh;
+        overflow-y: auto;
+        position: relative;
+        font:
+          12px/20px "Helvetica Neue",
+          Arial,
+          Helvetica,
+          sans-serif;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+      }
+
+      .close-button {
+        color: #666;
+        float: right;
+        font-size: 24px;
+        font-weight: bold;
+        cursor: pointer;
+        position: absolute;
+        right: 15px;
+        top: 10px;
+      }
+
+      .close-button:hover,
+      .close-button:focus {
+        color: #333;
+        text-decoration: none;
+      }
+
+      .modal-content h2 {
+        line-height: 24px;
+        display: block;
+        margin: 0 0 15px;
+        font-size: 16px;
+        font-weight: bold;
+      }
+
+      .modal-body {
+        margin-top: 10px;
+        line-height: 1.6;
+      }
+
+      .modal-body h3 {
+        margin-top: 20px;
+        margin-bottom: 8px;
+        font-size: 14px;
+        font-weight: bold;
+      }
+
+      .modal-body ul {
+        padding-left: 20px;
+        margin-top: 5px;
+        margin-bottom: 15px;
+      }
+
+      .modal-body li {
+        margin-bottom: 5px;
+      }
+
+      .modal-body p {
+        margin-bottom: 15px;
+      }
     </style>
   </head>
   <body>
@@ -81,12 +178,23 @@
 
     <div class="map-overlay top">
       <div class="map-overlay-inner">
-        <h2>HRRR Forecast Image</h2>
+        <h2>NOAA HRRR Browser</h2>
+        <button
+          id="info-button"
+          class="info-button"
+          title="About this application"
+        >
+          ⓘ
+        </button>
+        <body>
+          Real-time composite reflectivity (FH0)
+        </body>
         <label for="date-picker">Date:</label>
         <input type="date" id="date-picker" name="trip-start" />
 
         <label for="hour-slider"
-          >Forecast Hour (UTC): <span id="hour-value-display">t00z</span></label
+          >reference time (hours 0-23 UTC):
+          <span id="hour-value-display">t00z</span></label
         >
         <input
           id="hour-slider"
@@ -99,16 +207,26 @@
         <div id="loading-indicator">Pre-fetching images...</div>
       </div>
     </div>
-    <script src="map-settings.0c80e3d4e3518edc.js"></script>
+    <script src="map-settings.7ec7d5ba55115301.js"></script>
     <script>
       // --- Configuration ---
       const TITILER_BASE_URL = "https://raster.eoapi.dev"; // Base URL of your TiTiler instance
-      const TARGET_BBOX = "-134.121,21.122,-60.891,52.628"; // min_lon, min_lat, max_lon, max_lat (WGS84)
+      const BBOX = {
+        min_lon: -135,
+        min_lat: 21,
+        max_lon: -61,
+        max_lat: 55,
+      };
+
+      // Generate TARGET_BBOX string from BBOX
+      const TARGET_BBOX = `${BBOX.min_lon},${BBOX.min_lat},${BBOX.max_lon},${BBOX.max_lat}`;
+
+      // Generate MAP_IMAGE_COORDINATES from BBOX
       const MAP_IMAGE_COORDINATES = [
-        [-134.121, 52.628], // Upper Left (min_lon, max_lat)
-        [-60.891, 52.628], // Upper Right(max_lon, max_lat)
-        [-60.891, 21.122], // Lower Right(max_lon, min_lat)
-        [-134.12, 21.122], // Lower Left (min_lon, min_lat)
+        [BBOX.min_lon, BBOX.max_lat], // Upper Left
+        [BBOX.max_lon, BBOX.max_lat], // Upper Right
+        [BBOX.max_lon, BBOX.min_lat], // Lower Right
+        [BBOX.min_lon, BBOX.min_lat], // Lower Left
       ];
 
       // Reflectivity Colormap (pre-formatted for URL query string)
@@ -126,13 +244,14 @@
       // State Variables
       let isLayerInitialized = false;
       let cachedHours = new Set(); // Track which hours have been cached
+      let currentAbortController = null; // Track the current fetch request
 
       // --- Initialize Map ---
       const map = new maplibregl.Map({
         container: "map",
         style: `https://api.maptiler.com/maps/backdrop/style.json?key=${window.CONFIG.MAPTILER_API_KEY}`,
-        center: [-97.5, 35.0],
-        zoom: 4,
+        center: [-97.5, 40.0],
+        zoom: 3.5,
       });
 
       // --- Get DOM Elements ---
@@ -202,10 +321,12 @@
             }
           })
           .catch((error) => {
-            console.warn(`Error caching image: ${imageUrl}`, error);
+            // Ignore aborted requests as these are expected during fast scrolling
+            if (error.name !== "AbortError") {
+              console.warn(`Error caching image: ${imageUrl}`, error);
+            }
           });
       }
-
       /**
        * Asynchronously pre-caches images for all hours of the selected date
        */
@@ -217,6 +338,7 @@
 
         console.log(`Starting pre-cache for date: ${dateStrYYYYMMDD}`);
         loadingIndicator.style.display = "block";
+        loadingIndicator.textContent = "Pre-fetching images...";
         cachedHours.clear(); // Reset cached hours for new date
 
         // Generate all hour strings and start caching in parallel
@@ -236,16 +358,22 @@
 
       /**
        * Updates the map layer to display the image for the specified hour
+       * with request cancellation but no debouncing
        */
       function displayImageForHour(dateStrYYYYMMDD, hourValue) {
         const hourStrTXXz = formatHour(hourValue);
         hourValueDisplay.textContent = hourStrTXXz;
 
-        // Build the image URL directly (no need to check the cache)
+        // Show loading indicator
+        loadingIndicator.style.display = "block";
+        loadingIndicator.textContent = "Loading...";
+
+        // Build the image URL
         const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
 
         if (!imageUrl) {
           console.error("Could not generate image URL");
+          loadingIndicator.style.display = "none";
           return;
         }
 
@@ -255,45 +383,87 @@
           cachedHours.add(hourValue);
         }
 
-        // Update or add the image to the map
-        const hrrrSource = map.getSource(HRRR_SOURCE_ID);
-
-        if (hrrrSource && isLayerInitialized) {
-          // Update existing source
-          hrrrSource.updateImage({
-            url: imageUrl,
-            coordinates: MAP_IMAGE_COORDINATES,
-          });
-          console.log(`Updated image for hour ${hourValue}`);
-        } else {
-          // Initialize source and layer for the first time
-          console.log(
-            `Initializing image source and layer for hour ${hourValue}`,
-          );
-
-          // Remove any stale layer/source
-          if (map.getLayer(HRRR_LAYER_ID)) map.removeLayer(HRRR_LAYER_ID);
-          if (map.getSource(HRRR_SOURCE_ID)) map.removeSource(HRRR_SOURCE_ID);
-
-          // Add new source and layer
-          map.addSource(HRRR_SOURCE_ID, {
-            type: "image",
-            url: imageUrl,
-            coordinates: MAP_IMAGE_COORDINATES,
-          });
-
-          map.addLayer({
-            id: HRRR_LAYER_ID,
-            type: "raster",
-            source: HRRR_SOURCE_ID,
-            paint: {
-              "raster-opacity": 0.75,
-              "raster-fade-duration": 0,
-            },
-          });
-
-          isLayerInitialized = true;
+        // Cancel any in-flight requests
+        if (currentAbortController) {
+          currentAbortController.abort();
         }
+
+        // Create a new abort controller for this request
+        currentAbortController = new AbortController();
+
+        // Fetch the image with the ability to cancel
+        fetch(imageUrl, {
+          signal: currentAbortController.signal,
+          cache: "default",
+        })
+          .then((response) => {
+            if (!response.ok) {
+              throw new Error(`HTTP error: ${response.status}`);
+            }
+            return response.blob();
+          })
+          .then((blob) => {
+            // Create an object URL from the blob
+            const objectUrl = URL.createObjectURL(blob);
+
+            // Update or add the image to the map
+            const hrrrSource = map.getSource(HRRR_SOURCE_ID);
+
+            if (hrrrSource && isLayerInitialized) {
+              // Update existing source
+              hrrrSource.updateImage({
+                url: objectUrl,
+                coordinates: MAP_IMAGE_COORDINATES,
+              });
+              console.log(`Updated image for hour ${hourValue}`);
+            } else {
+              // Initialize source and layer for the first time
+              console.log(
+                `Initializing image source and layer for hour ${hourValue}`,
+              );
+
+              // Remove any stale layer/source
+              if (map.getLayer(HRRR_LAYER_ID)) map.removeLayer(HRRR_LAYER_ID);
+              if (map.getSource(HRRR_SOURCE_ID))
+                map.removeSource(HRRR_SOURCE_ID);
+
+              // Add new source and layer
+              map.addSource(HRRR_SOURCE_ID, {
+                type: "image",
+                url: objectUrl,
+                coordinates: MAP_IMAGE_COORDINATES,
+              });
+
+              map.addLayer({
+                id: HRRR_LAYER_ID,
+                type: "raster",
+                source: HRRR_SOURCE_ID,
+                paint: {
+                  "raster-opacity": 0.75,
+                  "raster-fade-duration": 0,
+                },
+              });
+
+              isLayerInitialized = true;
+            }
+
+            // Hide loading indicator
+            loadingIndicator.style.display = "none";
+
+            // Clean up the object URL after a delay (to ensure it's been used by MapLibre)
+            setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
+          })
+          .catch((error) => {
+            // Only log errors that aren't from aborted requests
+            if (error.name !== "AbortError") {
+              console.error("Error loading image:", error);
+              loadingIndicator.textContent =
+                "Error loading data. Please try again.";
+            } else {
+              // For aborted requests, we just reset the loading indicator
+              loadingIndicator.style.display = "none";
+            }
+          });
       }
 
       // --- Map Load Event ---
@@ -332,6 +502,9 @@
           const currentDate = formatDate(datePicker.value);
           const newHour = parseInt(e.target.value, 10);
 
+          // Update the hour display immediately for better UX
+          hourValueDisplay.textContent = formatHour(newHour);
+
           if (currentDate) {
             displayImageForHour(currentDate, newHour);
           }
@@ -360,6 +533,105 @@
           isLayerInitialized = false;
         }
       });
+      // --- Info Modal Functionality ---
+      document.addEventListener("DOMContentLoaded", () => {
+        const infoButton = document.getElementById("info-button");
+        const infoModal = document.getElementById("info-modal");
+        const closeButton = document.querySelector(".close-button");
+
+        // Check if this is the user's first visit
+        function isFirstVisit() {
+          if (!localStorage.getItem("hrrrBrowserVisited")) {
+            localStorage.setItem("hrrrBrowserVisited", "true");
+            return true;
+          }
+          return false;
+        }
+
+        // Open the modal
+        function openModal() {
+          infoModal.style.display = "block";
+        }
+
+        // Close the modal
+        function closeModal() {
+          infoModal.style.display = "none";
+        }
+
+        // Event listeners for the modal
+        if (infoButton) {
+          infoButton.addEventListener("click", openModal);
+        } else {
+          console.error("Info button not found");
+        }
+
+        if (closeButton) {
+          closeButton.addEventListener("click", closeModal);
+        } else {
+          console.error("Close button not found");
+        }
+
+        // Close modal when clicking outside of it
+        window.addEventListener("click", (event) => {
+          if (event.target === infoModal) {
+            closeModal();
+          }
+        });
+
+        // Show modal automatically on first visit (after map loads)
+        if (isFirstVisit() && map.loaded()) {
+          // Short delay to ensure map is visible first
+          setTimeout(openModal, 1000);
+        } else if (isFirstVisit()) {
+          map.on("load", () => {
+            setTimeout(openModal, 1000);
+          });
+        }
+      });
     </script>
+    <!-- Info Modal -->
+    <div id="info-modal" class="modal">
+      <div class="modal-content">
+        <span class="close-button">&times;</span>
+        <h2>About NOAA HRRR Browser</h2>
+        <div class="modal-body">
+          <p>
+            This application allows you to browse real-time composite
+            reflectivity data from the NOAA High-Resolution Rapid Refresh (HRRR)
+            weather model.
+          </p>
+
+          <h3>How to Use</h3>
+          <ul>
+            <li>Select a <strong>date</strong> using the date picker</li>
+            <li>
+              Use the <strong>hour slider</strong> to view data from different
+              times (in UTC)
+            </li>
+            <li>
+              The map displays composite reflectivity, which is useful for
+              tracking precipitation and storm intensity
+            </li>
+          </ul>
+
+          <h3>About the Data</h3>
+          <p>
+            The HRRR is a real-time 3km resolution, hourly updated atmospheric
+            model operated by NOAA. This browser displays the "FH0" data, which
+            represents the analysis time (not a forecast).
+          </p>
+
+          <p>
+            Reflectivity values are shown with colors ranging from light blue
+            (weak returns) to purple (extreme precipitation).
+          </p>
+
+          <p>
+            Data is sourced from NOAA's public S3 bucket and rendered using
+            TiTiler.
+          </p>
+        </div>
+      </div>
+    </div>
   </body>
 </html>
