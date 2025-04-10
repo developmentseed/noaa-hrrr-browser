@@ -1,0 +1,365 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <title>HRRR Weather Image</title>
+    <meta
+      property="og:description"
+      content="Display HRRR weather data using a cropped PNG image."
+    />
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <link
+      rel="stylesheet"
+      href="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.css"
+    />
+    <script src="https://unpkg.com/maplibre-gl@5.3.0/dist/maplibre-gl.js"></script>
+    <style>
+      body {
+        margin: 0;
+        padding: 0;
+      }
+      html,
+      body,
+      #map {
+        height: 100%;
+      }
+      .map-overlay {
+        font:
+          12px/20px "Helvetica Neue",
+          Arial,
+          Helvetica,
+          sans-serif;
+        position: absolute;
+        width: 250px;
+        top: 10px;
+        left: 10px;
+        padding: 10px;
+        z-index: 1;
+      }
+      .map-overlay .map-overlay-inner {
+        background-color: #fff;
+        box-shadow: 0 1px 2px rgba(0, 0, 0, 0.2);
+        border-radius: 3px;
+        padding: 10px;
+        margin-bottom: 10px;
+      }
+      .map-overlay h2 {
+        line-height: 24px;
+        display: block;
+        margin: 0 0 10px;
+      }
+      .map-overlay label {
+        display: block;
+        margin-bottom: 5px;
+      }
+      .map-overlay input[type="range"] {
+        background-color: transparent;
+        display: inline-block;
+        width: 100%;
+        position: relative;
+        margin: 0;
+        cursor: ew-resize;
+      }
+      .map-overlay input[type="date"] {
+        width: calc(100% - 10px);
+        margin-bottom: 10px;
+      }
+      #hour-value-display {
+        font-weight: bold;
+        margin-left: 5px;
+      }
+      #loading-indicator {
+        margin-top: 5px;
+        font-style: italic;
+        color: #555;
+        display: none; /* Hidden by default */
+      }
+    </style>
+  </head>
+  <body>
+    <div id="map"></div>
+
+    <div class="map-overlay top">
+      <div class="map-overlay-inner">
+        <h2>HRRR Forecast Image</h2>
+        <label for="date-picker">Date:</label>
+        <input type="date" id="date-picker" name="trip-start" />
+
+        <label for="hour-slider"
+          >Forecast Hour (UTC): <span id="hour-value-display">t00z</span></label
+        >
+        <input
+          id="hour-slider"
+          type="range"
+          min="0"
+          max="23"
+          step="1"
+          value="0"
+        />
+        <div id="loading-indicator">Pre-fetching images...</div>
+      </div>
+    </div>
+    <script src="config.js"></script>
+    <script>
+      // --- Configuration ---
+      const TITILER_BASE_URL = "https://raster.eoapi.dev"; // Base URL of your TiTiler instance
+      const TARGET_BBOX = "-134.121,21.122,-60.891,52.628"; // min_lon, min_lat, max_lon, max_lat (WGS84)
+      const MAP_IMAGE_COORDINATES = [
+        [-134.121, 52.628], // Upper Left (min_lon, max_lat)
+        [-60.891, 52.628], // Upper Right(max_lon, max_lat)
+        [-60.891, 21.122], // Lower Right(max_lon, min_lat)
+        [-134.12, 21.122], // Lower Left (min_lon, min_lat)
+      ];
+
+      // Reflectivity Colormap (pre-formatted for URL query string)
+      const COLORMAP_PARAM =
+        "colormap=[[[5,%2010],%20[0,%20236,%20236,%20255]],%20[[10,%2015],%20[1,%20160,%20246,%20255]],%20[[15,%2020],%20[0,%200,%20246,%20255]],%20[[20,%2025],%20[0,%20255,%200,%20255]],%20[[25,%2030],%20[0,%20200,%200,%20255]],%20[[30,%2035],%20[0,%20144,%200,%20255]],%20[[35,%2040],%20[255,%20255,%200,%20255]],%20[[40,%2045],%20[231,%20192,%200,%20255]],%20[[45,%2050],%20[255,%20144,%200,%20255]],%20[[50,%2055],%20[255,%200,%200,%20255]],%20[[55,%2060],%20[214,%200,%200,%20255]],%20[[60,%2065],%20[192,%200,%200,%20255]],%20[[65,%2070],%20[255,%200,%20255,%20255]],%20[[70,%2075],%20[153,%2085,%20201,%20255]]]";
+      const OTHER_TITILER_PARAMS = "bidx=1"; // Keep relevant params
+      const HRRR_S3_BASE_URL =
+        "https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.";
+      const HRRR_FILE_SUFFIX = "/conus/hrrr.";
+      const HRRR_FILE_TYPE = ".wrfsfcf00.grib2";
+
+      const HRRR_SOURCE_ID = "hrrr-image-source";
+      const HRRR_LAYER_ID = "hrrr-image-layer";
+
+      // State Variables
+      let isLayerInitialized = false;
+      let cachedHours = new Set(); // Track which hours have been cached
+
+      // --- Initialize Map ---
+      const map = new maplibregl.Map({
+        container: "map",
+        style: `https://api.maptiler.com/maps/backdrop/style.json?key=${window.CONFIG.MAPTILER_API_KEY}`,
+        center: [-97.5, 35.0],
+        zoom: 4,
+      });
+
+      // --- Get DOM Elements ---
+      const datePicker = document.getElementById("date-picker");
+      const hourSlider = document.getElementById("hour-slider");
+      const hourValueDisplay = document.getElementById("hour-value-display");
+      const loadingIndicator = document.getElementById("loading-indicator");
+
+      // --- Helper Functions ---
+
+      function formatDate(dateString) {
+        if (!dateString) return "";
+        return dateString.replace(/-/g, "");
+      }
+
+      function setDefaultDate() {
+        const today = new Date();
+        const yesterday = new Date(today);
+        yesterday.setDate(today.getDate() - 1);
+        const yyyy = yesterday.getFullYear();
+        const mm = String(yesterday.getMonth() + 1).padStart(2, "0");
+        const dd = String(yesterday.getDate()).padStart(2, "0");
+        datePicker.value = `${yyyy}-${mm}-${dd}`;
+      }
+
+      function formatHour(hourNumber) {
+        const hourString = String(hourNumber).padStart(2, "0");
+        return `t${hourString}z`;
+      }
+
+      /**
+       * Builds the TiTiler URL to fetch a PNG cropped to a specific bounding box.
+       */
+      function buildImageUrl(dateStrYYYYMMDD, hourStrTXXz) {
+        if (!dateStrYYYYMMDD || !hourStrTXXz) {
+          console.warn("Date or Hour is missing, cannot build URL.");
+          return null;
+        }
+
+        // Create the correct S3 URL with proper encoding for the VRT parameter
+        const s3Path = `${HRRR_S3_BASE_URL}${dateStrYYYYMMDD}${HRRR_FILE_SUFFIX}${hourStrTXXz}${HRRR_FILE_TYPE}`;
+        const encodedS3Url = encodeURIComponent(`vrt://${s3Path}?bands=1`);
+
+        // Build the final TiTiler URL
+        const imageUrl = `${TITILER_BASE_URL}/external/bbox/${TARGET_BBOX}.png?url=${encodedS3Url}&${OTHER_TITILER_PARAMS}&${COLORMAP_PARAM}`;
+
+        return imageUrl;
+      }
+
+      /**
+       * Initiates browser caching for an image URL without waiting for completion
+       */
+      function cacheImage(imageUrl) {
+        // Use fetch to request the image and cache it
+        fetch(imageUrl, {
+          method: "GET",
+          mode: "cors", // Explicitly request CORS mode
+          cache: "default", // Allow browser to use its default caching behavior
+        })
+          .then((response) => {
+            if (!response.ok) {
+              console.warn(
+                `Failed to cache image: ${response.status} ${response.statusText}`,
+              );
+            } else {
+              console.log(`Successfully cached image: ${imageUrl}`);
+            }
+          })
+          .catch((error) => {
+            console.warn(`Error caching image: ${imageUrl}`, error);
+          });
+      }
+
+      /**
+       * Asynchronously pre-caches images for all hours of the selected date
+       */
+      async function preCacheImagesForDate(dateStrYYYYMMDD) {
+        if (!dateStrYYYYMMDD) {
+          console.warn("No date provided for pre-caching");
+          return;
+        }
+
+        console.log(`Starting pre-cache for date: ${dateStrYYYYMMDD}`);
+        loadingIndicator.style.display = "block";
+        cachedHours.clear(); // Reset cached hours for new date
+
+        // Generate all hour strings and start caching in parallel
+        for (let hour = 0; hour <= 23; hour++) {
+          const hourStrTXXz = formatHour(hour);
+          const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
+
+          if (imageUrl) {
+            cacheImage(imageUrl);
+            cachedHours.add(hour);
+          }
+        }
+
+        loadingIndicator.style.display = "none";
+        console.log("Pre-caching initiated for all hours");
+      }
+
+      /**
+       * Updates the map layer to display the image for the specified hour
+       */
+      function displayImageForHour(dateStrYYYYMMDD, hourValue) {
+        const hourStrTXXz = formatHour(hourValue);
+        hourValueDisplay.textContent = hourStrTXXz;
+
+        // Build the image URL directly (no need to check the cache)
+        const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
+
+        if (!imageUrl) {
+          console.error("Could not generate image URL");
+          return;
+        }
+
+        // If this hour hasn't been cached yet, start caching it
+        if (!cachedHours.has(hourValue)) {
+          cacheImage(imageUrl);
+          cachedHours.add(hourValue);
+        }
+
+        // Update or add the image to the map
+        const hrrrSource = map.getSource(HRRR_SOURCE_ID);
+
+        if (hrrrSource && isLayerInitialized) {
+          // Update existing source
+          hrrrSource.updateImage({
+            url: imageUrl,
+            coordinates: MAP_IMAGE_COORDINATES,
+          });
+          console.log(`Updated image for hour ${hourValue}`);
+        } else {
+          // Initialize source and layer for the first time
+          console.log(
+            `Initializing image source and layer for hour ${hourValue}`,
+          );
+
+          // Remove any stale layer/source
+          if (map.getLayer(HRRR_LAYER_ID)) map.removeLayer(HRRR_LAYER_ID);
+          if (map.getSource(HRRR_SOURCE_ID)) map.removeSource(HRRR_SOURCE_ID);
+
+          // Add new source and layer
+          map.addSource(HRRR_SOURCE_ID, {
+            type: "image",
+            url: imageUrl,
+            coordinates: MAP_IMAGE_COORDINATES,
+          });
+
+          map.addLayer({
+            id: HRRR_LAYER_ID,
+            type: "raster",
+            source: HRRR_SOURCE_ID,
+            paint: {
+              "raster-opacity": 0.75,
+              "raster-fade-duration": 0,
+            },
+          });
+
+          isLayerInitialized = true;
+        }
+      }
+
+      // --- Map Load Event ---
+      map.on("load", async () => {
+        console.log("Map loaded.");
+        setDefaultDate();
+
+        const initialDate = formatDate(datePicker.value);
+        const initialHour = parseInt(hourSlider.value, 10);
+
+        if (initialDate) {
+          // Start pre-caching for all hours (don't wait for completion)
+          preCacheImagesForDate(initialDate);
+
+          // Display the initial hour
+          displayImageForHour(initialDate, initialHour);
+        } else {
+          console.warn("Initial date not set, layer not loaded.");
+        }
+
+        // --- Event Listeners ---
+        datePicker.addEventListener("change", async (e) => {
+          const newDate = formatDate(e.target.value);
+          const currentHour = parseInt(hourSlider.value, 10);
+
+          if (newDate) {
+            // Start pre-caching for the new date
+            preCacheImagesForDate(newDate);
+
+            // Display the current hour for the new date
+            displayImageForHour(newDate, currentHour);
+          }
+        });
+
+        hourSlider.addEventListener("input", (e) => {
+          const currentDate = formatDate(datePicker.value);
+          const newHour = parseInt(e.target.value, 10);
+
+          if (currentDate) {
+            displayImageForHour(currentDate, newHour);
+          }
+        });
+      });
+
+      // --- Error Handling ---
+      map.on("error", (e) => {
+        console.error("MapLibre Error:", e);
+
+        if (
+          e.sourceId === HRRR_SOURCE_ID ||
+          (e.source && e.source.id === HRRR_SOURCE_ID)
+        ) {
+          console.error(
+            `Error related to source ${HRRR_SOURCE_ID}. Check TiTiler endpoint, S3 URL validity, and network.`,
+            e.error || "",
+          );
+
+          // Show user-friendly error message
+          loadingIndicator.textContent =
+            "Error loading weather data. Please try a different date or hour.";
+          loadingIndicator.style.display = "block";
+
+          // Reset initialization flag to try again on next interaction
+          isLayerInitialized = false;
+        }
+      });
+    </script>
+  </body>
+</html>
