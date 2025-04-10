@@ -1,0 +1,27 @@
+name: Build and Deploy
+on:
+  push:
+    branches: [main]
+
+jobs:
+  build-and-deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+       
+      - name: Create config file
+        run: |
+          cat > config.js << 'EOL'
+          window.CONFIG = {
+            MAPTILER_API_KEY: "${{ secrets.MAPTILER_API_KEY }}",
+            TITILER_BASE_URL: "${{ secrets.TITILER_BASE_URL || 'https://raster.eoapi.dev' }}"
+          };
+          EOL
+     
+      - name: Deploy to GitHub Pages
+        uses: JamesIves/github-pages-deploy-action@v4
+        with:
+          folder: .
+          branch: gh-pages
+
