@@ -1,4 +1,5 @@
-name: Build and Deploy
+name: Deploy to GitHub Pages
+
 on:
   push:
     branches: [ main ]
@@ -13,19 +14,47 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-       
-      - name: Create config file
+        
+      - name: Create build directory
+        run: mkdir -p build
+        
+      - name: Copy files to build directory
         run: |
-          cat > config.js << 'EOL'
+          cp *.html build/
+          cp *.css build/ || true
+          cp -r img build/ || true
+          
+      - name: Create config file with random name
+        run: |
+          # Generate a random hash
+          RANDOM_HASH=$(openssl rand -hex 8)
+          CONFIG_FILENAME="map-settings.${RANDOM_HASH}.js"
+          
+          # Create the config file with the random name
+          cat > "build/${CONFIG_FILENAME}" << 'EOL'
           window.CONFIG = {
             MAPTILER_API_KEY: "${{ secrets.MAPTILER_API_KEY }}",
-            TITILER_BASE_URL: "${{ secrets.TITILER_BASE_URL || 'https://raster.eoapi.dev' }}"
+            TITILER_BASE_URL: "${{ secrets.TITILER_BASE_URL }}"
           };
           EOL
-     
+          
+          # Update HTML files to use the new config filename
+          for htmlfile in build/*.html; do
+            sed -i "s|config.js|${CONFIG_FILENAME}|g" "$htmlfile"
+          done
+          
+      - name: Create robots.txt
+        run: |
+          cat > build/robots.txt << 'EOL'
+          User-agent: *
+          Disallow: /*.js$
+          Allow: /index.html
+          Allow: /
+          EOL
+      
       - name: Deploy to GitHub Pages
         uses: JamesIves/github-pages-deploy-action@v4
         with:
-          folder: .
+          folder: build
           branch: gh-pages
-
+          clean: true
