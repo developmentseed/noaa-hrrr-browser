@@ -5,6 +5,7 @@
 // DOM Elements
 const datePicker = document.getElementById("date-picker");
 const hourSlider = document.getElementById("hour-slider");
+const layerSelector = document.getElementById("layer-selector");
 
 /**
  * Initialize the application when document is loaded
@@ -51,6 +52,39 @@ function initializeTimezoneDisplay() {
  * Set up event listeners for user interactions
  */
 function setupEventListeners() {
+  // Layer selector change event
+  layerSelector.addEventListener("change", async (e) => {
+    const selectedLayer = e.target.value;
+    
+    // Update the current layer in constants
+    CONSTANTS.currentLayer = selectedLayer;
+    
+    // Update the description based on the selected layer
+    updateLayerDescription(selectedLayer);
+    
+    // Reset the layer and reload with the new layer
+    resetLayer();
+    
+    // Get current date and hour
+    const currentLocalDate = datePicker.value;
+    const currentLocalHour = parseInt(hourSlider.value, 10);
+    
+    if (currentLocalDate) {
+      // Convert local date/hour to UTC for data fetching
+      const utcInfo = convertLocalToUTC(currentLocalDate, currentLocalHour);
+      
+      // Start pre-caching for the UTC date with the new layer
+      await preCacheImagesForDate(utcInfo.utcDate);
+      
+      // Check if we have cached hours and use the most recent one
+      const mostRecentHour = getMostRecentCachedHour();
+      const hourToUse = mostRecentHour !== null ? mostRecentHour : utcInfo.utcHour;
+      
+      // Display the selected hour for the new layer
+      displayImageForHour(utcInfo.utcDate, hourToUse);
+    }
+  });
+
   // Date picker change event
   datePicker.addEventListener("change", async (e) => {
     const selectedLocalDate = e.target.value;
@@ -160,5 +194,27 @@ async function loadInitialData() {
     displayImageForHour(utcInfo.utcDate, hourToUse);
   } else {
     console.warn("Initial date not set, layer not loaded.");
+  }
+}
+
+/**
+ * Update the layer description based on the selected layer
+ * @param {string} layerKey - The layer key (e.g., 'REFLECTIVITY', 'MASSDEN')
+ */
+function updateLayerDescription(layerKey) {
+  const descriptionElement = document.querySelector('.description');
+  const layer = CONSTANTS.LAYERS[layerKey];
+  
+  if (layer) {
+    switch (layerKey) {
+      case 'REFLECTIVITY':
+        descriptionElement.textContent = 'Real-time composite reflectivity (FH0)';
+        break;
+      case 'MASSDEN':
+        descriptionElement.textContent = 'Real-time smoke mass density (FH0)';
+        break;
+      default:
+        descriptionElement.textContent = `Real-time ${layer.name} (FH0)`;
+    }
   }
 }
