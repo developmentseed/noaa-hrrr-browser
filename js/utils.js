@@ -118,16 +118,14 @@ function formatDate(dateString) {
 }
 
 /**
- * Sets default date to yesterday
+ * Sets default date to today
  * @param {HTMLInputElement} datePicker - Date input element
  */
 function setDefaultDate(datePicker) {
   const today = new Date();
-  const yesterday = new Date(today);
-  yesterday.setDate(today.getDate() - 1);
-  const yyyy = yesterday.getFullYear();
-  const mm = String(yesterday.getMonth() + 1).padStart(2, "0");
-  const dd = String(yesterday.getDate()).padStart(2, "0");
+  const yyyy = today.getFullYear();
+  const mm = String(today.getMonth() + 1).padStart(2, "0");
+  const dd = String(today.getDate()).padStart(2, "0");
   datePicker.value = `${yyyy}-${mm}-${dd}`;
 }
 
@@ -139,6 +137,85 @@ function setDefaultDate(datePicker) {
 function formatHour(hourNumber) {
   const hourString = String(hourNumber).padStart(2, "0");
   return `t${hourString}z`;
+}
+
+/**
+ * Converts a local date and hour to UTC
+ * @param {string} dateStr - Date in YYYY-MM-DD format
+ * @param {number} localHour - Hour in local timezone (0-23)
+ * @returns {Object} Object with utcDate (YYYYMMDD) and utcHour (0-23)
+ */
+function convertLocalToUTC(dateStr, localHour) {
+  const [year, month, day] = dateStr.split('-');
+  const localDate = new Date(year, month - 1, day, localHour);
+  
+  const utcDate = new Date(localDate.getTime() + localDate.getTimezoneOffset() * 60000);
+  
+  const utcYear = utcDate.getFullYear();
+  const utcMonth = String(utcDate.getMonth() + 1).padStart(2, "0");
+  const utcDay = String(utcDate.getDate()).padStart(2, "0");
+  const utcHour = utcDate.getHours();
+  
+  return {
+    utcDate: `${utcYear}${utcMonth}${utcDay}`,
+    utcHour: utcHour
+  };
+}
+
+/**
+ * Converts UTC date and hour to local timezone
+ * @param {string} utcDateStr - Date in YYYYMMDD format
+ * @param {number} utcHour - Hour in UTC (0-23)
+ * @returns {Object} Object with localDate (YYYY-MM-DD) and localHour (0-23)
+ */
+function convertUTCToLocal(utcDateStr, utcHour) {
+  const year = utcDateStr.substring(0, 4);
+  const month = utcDateStr.substring(4, 6);
+  const day = utcDateStr.substring(6, 8);
+  
+  const utcDate = new Date(`${year}-${month}-${day}T${String(utcHour).padStart(2, '0')}:00:00Z`);
+  
+  const localYear = utcDate.getFullYear();
+  const localMonth = String(utcDate.getMonth() + 1).padStart(2, "0");
+  const localDay = String(utcDate.getDate()).padStart(2, "0");
+  const localHour = utcDate.getHours();
+  
+  return {
+    localDate: `${localYear}-${localMonth}-${localDay}`,
+    localHour: localHour
+  };
+}
+
+/**
+ * Formats an hour number for display in local timezone
+ * @param {number} hourNumber - Hour (0-23)
+ * @returns {string} Formatted hour string in 24-hour format
+ */
+function formatLocalHour(hourNumber) {
+  const hourString = String(hourNumber).padStart(2, "0");
+  return `${hourString}:00`;
+}
+
+/**
+ * Gets the user's timezone abbreviation
+ * @returns {string} Timezone abbreviation (e.g., "PST", "EST")
+ */
+function getTimezoneAbbreviation() {
+  const date = new Date();
+  const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
+  
+  try {
+    const shortName = date.toLocaleString('en-US', {
+      timeZone: timeZone,
+      timeZoneName: 'short'
+    }).split(' ').pop();
+    return shortName;
+  } catch (e) {
+    // Fallback to offset
+    const offset = -date.getTimezoneOffset() / 60;
+    const sign = offset >= 0 ? '+' : '-';
+    return `UTC${sign}${Math.abs(offset)}`;
+  }
 }
 
 /**

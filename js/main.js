@@ -26,6 +26,9 @@ function initializeApp() {
   // Set default date (yesterday)
   setDefaultDate(datePicker);
 
+  // Set up timezone display
+  initializeTimezoneDisplay();
+
   // Set up modal functionality
   initializeModal();
 
@@ -37,37 +40,88 @@ function initializeApp() {
 }
 
 /**
+ * Initialize timezone display in the UI
+ */
+function initializeTimezoneDisplay() {
+  const timezoneDisplay = document.getElementById("timezone-display");
+  timezoneDisplay.textContent = getTimezoneAbbreviation();
+}
+
+/**
  * Set up event listeners for user interactions
  */
 function setupEventListeners() {
   // Date picker change event
   datePicker.addEventListener("change", async (e) => {
-    const newDate = formatDate(e.target.value);
-    const currentHour = parseInt(hourSlider.value, 10);
+    const selectedLocalDate = e.target.value;
+    const currentLocalHour = parseInt(hourSlider.value, 10);
 
-    if (newDate) {
+    if (selectedLocalDate) {
       // Reset the layer when changing dates
       resetLayer();
 
-      // Start pre-caching for the new date
-      await preCacheImagesForDate(newDate);
+      // Convert local date/hour to UTC for data fetching
+      const utcInfo = convertLocalToUTC(selectedLocalDate, currentLocalHour);
+      
+      // Start pre-caching for the UTC date
+      await preCacheImagesForDate(utcInfo.utcDate);
 
-      // Display the current hour for the new date
-      displayImageForHour(newDate, currentHour);
+      // Check if we have cached hours and use the most recent one
+      const mostRecentHour = getMostRecentCachedHour();
+      const hourToUse = mostRecentHour !== null ? mostRecentHour : utcInfo.utcHour;
+
+      // Update the slider to reflect the hour we're actually using (convert back to local)
+      if (mostRecentHour !== null) {
+        const localInfo = convertUTCToLocal(utcInfo.utcDate, mostRecentHour);
+        
+        // Handle case where the UTC date might have changed due to timezone conversion
+        if (localInfo.localDate !== selectedLocalDate) {
+          // If the local date changed, we need to adjust the slider value
+          hourSlider.value = localInfo.localHour;
+          document.getElementById("hour-value-display").textContent = formatLocalHour(localInfo.localHour);
+        } else {
+          hourSlider.value = localInfo.localHour;
+          document.getElementById("hour-value-display").textContent = formatLocalHour(localInfo.localHour);
+        }
+      }
+
+      // Display the selected hour for the new date
+      displayImageForHour(utcInfo.utcDate, hourToUse);
     }
   });
 
   // Hour slider change event
   hourSlider.addEventListener("input", (e) => {
-    const currentDate = formatDate(datePicker.value);
-    const newHour = parseInt(e.target.value, 10);
+    const currentLocalDate = datePicker.value;
+    const requestedLocalHour = parseInt(e.target.value, 10);
 
-    // Update the hour display immediately for better UX
-    document.getElementById("hour-value-display").textContent =
-      formatHour(newHour);
+    // Convert local date/hour to UTC for data fetching
+    const utcInfo = convertLocalToUTC(currentLocalDate, requestedLocalHour);
 
-    if (currentDate) {
-      displayImageForHour(currentDate, newHour);
+    // Find the nearest cached hour to the requested UTC hour
+    const nearestCachedHour = getNearestCachedHour(utcInfo.utcHour);
+    
+    if (nearestCachedHour !== null) {
+      // Snap the slider to the nearest cached hour (convert back to local)
+      const localInfo = convertUTCToLocal(utcInfo.utcDate, nearestCachedHour);
+      const localHourToUse = localInfo.localHour;
+      
+      // Update the slider value if it's different from what the user selected
+      if (localHourToUse !== requestedLocalHour) {
+        hourSlider.value = localHourToUse;
+      }
+      
+      // Update the hour display
+      document.getElementById("hour-value-display").textContent =
+        formatLocalHour(localHourToUse);
+
+      if (currentLocalDate) {
+        displayImageForHour(utcInfo.utcDate, nearestCachedHour);
+      }
+    } else {
+      // No cached hours available, keep display as is
+      document.getElementById("hour-value-display").textContent =
+        formatLocalHour(requestedLocalHour);
     }
   });
 }
@@ -75,16 +129,35 @@ function setupEventListeners() {
 /**
  * Load initial data when the application starts
  */
-function loadInitialData() {
-  const initialDate = formatDate(datePicker.value);
-  const initialHour = parseInt(hourSlider.value, 10);
+async function loadInitialData() {
+  const initialLocalDate = datePicker.value;
+  const initialLocalHour = parseInt(hourSlider.value, 10);
 
-  if (initialDate) {
-    // Start pre-caching for all hours (don't wait for completion)
-    preCacheImagesForDate(initialDate);
+  if (initialLocalDate) {
+    // Convert local date/hour to UTC for data fetching
+    const utcInfo = convertLocalToUTC(initialLocalDate, initialLocalHour);
+    
+    // Start pre-caching for all hours and wait for some to complete
+    await preCacheImagesForDate(utcInfo.utcDate);
 
-    // Display the initial hour
-    displayImageForHour(initialDate, initialHour);
+    // Check if we have cached hours and use the most recent one
+    const mostRecentHour = getMostRecentCachedHour();
+    const hourToUse = mostRecentHour !== null ? mostRecentHour : utcInfo.utcHour;
+
+    console.log("Initial load - Most recent cached hour:", mostRecentHour);
+    console.log("Initial load - Hour to use:", hourToUse);
+
+    // Update the slider to reflect the hour we're actually using (convert back to local)
+    if (mostRecentHour !== null) {
+      const localInfo = convertUTCToLocal(utcInfo.utcDate, mostRecentHour);
+      hourSlider.value = localInfo.localHour;
+      document.getElementById("hour-value-display").textContent = formatLocalHour(localInfo.localHour);
+    } else {
+      document.getElementById("hour-value-display").textContent = formatLocalHour(initialLocalHour);
+    }
+
+    // Display the selected hour
+    displayImageForHour(utcInfo.utcDate, hourToUse);
   } else {
     console.warn("Initial date not set, layer not loaded.");
   }
