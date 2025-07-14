@@ -98,7 +98,9 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
 
   const loadingIndicator = document.getElementById("loading-indicator");
 
-  console.log(`Starting pre-cache for date: ${dateStrYYYYMMDD}`);
+  console.log(
+    `Starting pre-cache for date: ${dateStrYYYYMMDD} with layer: ${CONSTANTS.currentLayer}`,
+  );
   // Show loading indicator during pre-caching
   loadingIndicator.style.display = "block";
   loadingIndicator.textContent = "Pre-fetching images...";
@@ -112,7 +114,11 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
   const cachePromises = [];
   for (let hour = 23; hour >= 0; hour--) {
     const hourStrTXXz = formatHour(hour);
-    const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
+    const imageUrl = buildImageUrl(
+      dateStrYYYYMMDD,
+      hourStrTXXz,
+      CONSTANTS.currentLayer,
+    );
 
     if (imageUrl) {
       // Use a more controlled caching approach that returns a promise
@@ -125,12 +131,17 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
           if (response.ok) {
             cachedHours.add(hour);
             cachedHoursOrder.push(hour);
-            console.log(`Cached hour ${hour}`);
+            console.log(
+              `Cached hour ${hour} for layer ${CONSTANTS.currentLayer}`,
+            );
           }
           return response;
         })
         .catch((error) => {
-          console.warn(`Error pre-caching hour ${hour}:`, error);
+          console.warn(
+            `Error pre-caching hour ${hour} for layer ${CONSTANTS.currentLayer}:`,
+            error,
+          );
         });
 
       cachePromises.push(cachePromise);
@@ -207,8 +218,12 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
   const hourStrTXXz = formatHour(hourValue);
   const loadingIndicator = document.getElementById("loading-indicator");
 
-  // Build the image URL
-  const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
+  // Build the image URL with current layer
+  const imageUrl = buildImageUrl(
+    dateStrYYYYMMDD,
+    hourStrTXXz,
+    CONSTANTS.currentLayer,
+  );
 
   if (!imageUrl) {
     console.error("Could not generate image URL");
@@ -260,11 +275,13 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
           url: objectUrl,
           coordinates: CONSTANTS.MAP_IMAGE_COORDINATES,
         });
-        console.log(`Updated image for hour ${hourValue}`);
+        console.log(
+          `Updated image for hour ${hourValue} with layer ${CONSTANTS.currentLayer}`,
+        );
       } else {
         // Initialize source and layer for the first time
         console.log(
-          `Initializing image source and layer for hour ${hourValue}`,
+          `Initializing image source and layer for hour ${hourValue} with layer ${CONSTANTS.currentLayer}`,
         );
 
         // Remove any stale layer/source

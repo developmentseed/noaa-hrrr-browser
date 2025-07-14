@@ -29,6 +29,13 @@
           ⓘ
         </button>
         <p class="description">Real-time composite reflectivity (FH0)</p>
+
+        <label for="layer-selector">Layer:</label>
+        <select id="layer-selector">
+          <option value="REFLECTIVITY">Composite Reflectivity</option>
+          <option value="MASSDEN">Smoke (Mass Density)</option>
+        </select>
+
         <label for="date-picker">Date:</label>
         <input type="date" id="date-picker" name="trip-start" />
 
@@ -56,8 +63,8 @@
         <div class="modal-body">
           <p>
             This application allows you to browse real-time composite
-            reflectivity data from the NOAA High-Resolution Rapid Refresh (HRRR)
-            weather model.
+            reflectivity and near-surface smoke data from the NOAA
+            High-Resolution Rapid Refresh (HRRR) weather model.
           </p>
 
           <h3>How to Use</h3>
