@@ -141,10 +141,8 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
   // Since we're caching from hour 23 down to 0, the first few promises are the most recent
   try {
     await Promise.race([
-      // Wait for the first 5 hours to cache (which are now the most recent: 23, 22, 21, 20, 19)
       Promise.all(cachePromises.slice(0, 5)),
-      // Or a timeout of 5 seconds
-      new Promise((resolve) => setTimeout(resolve, 5000)),
+      new Promise((resolve) => setTimeout(resolve, 8000)),
     ]);
   } catch (error) {
     console.warn("Error during pre-caching:", error);
@@ -153,7 +151,10 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
   // Hide the loading indicator after initial caching
   loadingIndicator.style.display = "none";
   console.log("Initial pre-caching completed");
-  console.log("Cached hours so far:", Array.from(cachedHours).sort((a, b) => a - b));
+  console.log(
+    "Cached hours so far:",
+    Array.from(cachedHours).sort((a, b) => a - b),
+  );
   console.log("Cached hours order:", cachedHoursOrder);
 }
 
@@ -181,11 +182,11 @@ function getNearestCachedHour(targetHour) {
   }
 
   const cachedArray = Array.from(cachedHours).sort((a, b) => a - b);
-  
+
   // Find the closest cached hour
   let closest = cachedArray[0];
   let minDiff = Math.abs(targetHour - closest);
-  
+
   for (const hour of cachedArray) {
     const diff = Math.abs(targetHour - hour);
     if (diff < minDiff) {
@@ -193,7 +194,7 @@ function getNearestCachedHour(targetHour) {
       closest = hour;
     }
   }
-  
+
   return closest;
 }
 
@@ -204,10 +205,7 @@ function getNearestCachedHour(targetHour) {
  */
 function displayImageForHour(dateStrYYYYMMDD, hourValue) {
   const hourStrTXXz = formatHour(hourValue);
-  const hourValueDisplay = document.getElementById("hour-value-display");
   const loadingIndicator = document.getElementById("loading-indicator");
-
-  // The hour display is now updated by the main.js event handlers, so we don't update it here
 
   // Build the image URL
   const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
