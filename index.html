@@ -33,8 +33,8 @@
         <input type="date" id="date-picker" name="trip-start" />
 
         <label for="hour-slider">
-          reference time (hours 0-23 UTC):
-          <span id="hour-value-display">t00z</span>
+          Local time (<span id="timezone-display">UTC</span>):
+          <span id="hour-value-display">00:00</span>
         </label>
         <input
           id="hour-slider"
@@ -65,7 +65,7 @@
             <li>Select a <strong>date</strong> using the date picker</li>
             <li>
               Use the <strong>hour slider</strong> to view data from different
-              times (in UTC)
+              times (displayed in your local timezone)
             </li>
             <li>
               The map displays composite reflectivity, which is useful for

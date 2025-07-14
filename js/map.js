@@ -10,6 +10,7 @@ const HRRR_LAYER_ID = "hrrr-image-layer";
 let map;
 let isLayerInitialized = false;
 let cachedHours = new Set(); // Track which hours have been cached
+let cachedHoursOrder = []; // Track the order in which hours were cached
 let currentAbortController = null; // Track the current fetch request
 
 /**
@@ -104,10 +105,12 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
 
   // Reset cached hours for new date
   cachedHours.clear();
+  cachedHoursOrder = [];
 
   // Generate all hour strings and start caching in parallel
+  // Start from the most recent hour (23) and work backwards for better user experience
   const cachePromises = [];
-  for (let hour = 0; hour <= 23; hour++) {
+  for (let hour = 23; hour >= 0; hour--) {
     const hourStrTXXz = formatHour(hour);
     const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
 
@@ -121,6 +124,7 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
         .then((response) => {
           if (response.ok) {
             cachedHours.add(hour);
+            cachedHoursOrder.push(hour);
             console.log(`Cached hour ${hour}`);
           }
           return response;
@@ -133,14 +137,14 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
     }
   }
 
-  // Wait for the first few images to cache before hiding the indicator
-  // This ensures the indicator stays visible during initial caching
+  // Wait for some images to cache, prioritizing the most recent hours
+  // Since we're caching from hour 23 down to 0, the first few promises are the most recent
   try {
     await Promise.race([
-      // Wait for the first few hours to cache
-      Promise.all(cachePromises.slice(0, 3)),
-      // Or a timeout of 3 seconds, whichever comes first
-      new Promise((resolve) => setTimeout(resolve, 3000)),
+      // Wait for the first 5 hours to cache (which are now the most recent: 23, 22, 21, 20, 19)
+      Promise.all(cachePromises.slice(0, 5)),
+      // Or a timeout of 5 seconds
+      new Promise((resolve) => setTimeout(resolve, 5000)),
     ]);
   } catch (error) {
     console.warn("Error during pre-caching:", error);
@@ -149,6 +153,48 @@ async function preCacheImagesForDate(dateStrYYYYMMDD) {
   // Hide the loading indicator after initial caching
   loadingIndicator.style.display = "none";
   console.log("Initial pre-caching completed");
+  console.log("Cached hours so far:", Array.from(cachedHours).sort((a, b) => a - b));
+  console.log("Cached hours order:", cachedHoursOrder);
+}
+
+/**
+ * Get the most recent (highest) hour that was successfully cached
+ * @returns {number|null} The most recent cached hour, or null if none cached
+ */
+function getMostRecentCachedHour() {
+  if (cachedHoursOrder.length === 0) {
+    return null;
+  }
+
+  // Return the highest hour from the cached hours
+  return Math.max(...cachedHoursOrder);
+}
+
+/**
+ * Find the nearest cached hour to a given hour
+ * @param {number} targetHour - The hour to find the nearest cached hour to
+ * @returns {number|null} The nearest cached hour, or null if none cached
+ */
+function getNearestCachedHour(targetHour) {
+  if (cachedHours.size === 0) {
+    return null;
+  }
+
+  const cachedArray = Array.from(cachedHours).sort((a, b) => a - b);
+  
+  // Find the closest cached hour
+  let closest = cachedArray[0];
+  let minDiff = Math.abs(targetHour - closest);
+  
+  for (const hour of cachedArray) {
+    const diff = Math.abs(targetHour - hour);
+    if (diff < minDiff) {
+      minDiff = diff;
+      closest = hour;
+    }
+  }
+  
+  return closest;
 }
 
 /**
@@ -161,7 +207,7 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
   const hourValueDisplay = document.getElementById("hour-value-display");
   const loadingIndicator = document.getElementById("loading-indicator");
 
-  hourValueDisplay.textContent = hourStrTXXz;
+  // The hour display is now updated by the main.js event handlers, so we don't update it here
 
   // Build the image URL
   const imageUrl = buildImageUrl(dateStrYYYYMMDD, hourStrTXXz);
