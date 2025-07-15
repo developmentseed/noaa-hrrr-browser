@@ -1,10 +1,3 @@
-/**
- * Modal functionality for the info dialog
- */
-
-/**
- * Initialize modal functionality
- */
 function initializeModal() {
   const infoButton = document.getElementById("info-button");
   const infoModal = document.getElementById("info-modal");
@@ -15,21 +8,17 @@ function initializeModal() {
     return;
   }
 
-  // Event listeners for the modal
   infoButton.addEventListener("click", openModal);
   closeButton.addEventListener("click", closeModal);
 
-  // Close modal when clicking outside of it
   window.addEventListener("click", (event) => {
     if (event.target === infoModal) {
       closeModal();
     }
   });
 
-  // Show modal automatically on first visit (after map loads)
   if (isFirstVisit()) {
     if (map.loaded()) {
-      // Short delay to ensure map is visible first
       setTimeout(openModal, 1000);
     } else {
       map.on("load", () => {
@@ -39,10 +28,6 @@ function initializeModal() {
   }
 }
 
-/**
- * Check if this is the user's first visit
- * @returns {boolean} True if first visit, false otherwise
- */
 function isFirstVisit() {
   if (!localStorage.getItem("hrrrBrowserVisited")) {
     localStorage.setItem("hrrrBrowserVisited", "true");
@@ -51,9 +36,6 @@ function isFirstVisit() {
   return false;
 }
 
-/**
- * Open the modal
- */
 function openModal() {
   const infoModal = document.getElementById("info-modal");
   if (infoModal) {
@@ -61,9 +43,6 @@ function openModal() {
   }
 }
 
-/**
- * Close the modal
- */
 function closeModal() {
   const infoModal = document.getElementById("info-modal");
   if (infoModal) {
