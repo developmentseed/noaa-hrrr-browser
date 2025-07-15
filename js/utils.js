@@ -1,10 +1,4 @@
-/**
- * Utility functions for the HRRR Browser application
- */
-
-// Constants for application
 const CONSTANTS = {
-  // Bounding box for the map coverage
   BBOX: {
     min_lon: -134.12,
     min_lat: 21.12,
@@ -15,13 +9,11 @@ const CONSTANTS = {
   TITILER_BASE_URL:
     window.CONFIG.TITILER_BASE_URL || "https://raster.eoapi.dev",
 
-  // Layer configuration
   LAYERS: {
     REFLECTIVITY: {
       name: "Composite Reflectivity",
       band: 1,
       colormap: [
-        // Light blue for weak reflectivity
         [
           [5, 10],
           [0, 236, 236, 255],
@@ -34,8 +26,6 @@ const CONSTANTS = {
           [15, 20],
           [0, 0, 246, 255],
         ],
-
-        // Green shades for moderate reflectivity
         [
           [20, 25],
           [0, 255, 0, 255],
@@ -48,8 +38,6 @@ const CONSTANTS = {
           [30, 35],
           [0, 144, 0, 255],
         ],
-
-        // Yellow for increasing reflectivity
         [
           [35, 40],
           [255, 255, 0, 255],
@@ -58,8 +46,6 @@ const CONSTANTS = {
           [40, 45],
           [231, 192, 0, 255],
         ],
-
-        // Orange to red for high reflectivity
         [
           [45, 50],
           [255, 144, 0, 255],
@@ -76,8 +62,6 @@ const CONSTANTS = {
           [60, 65],
           [192, 0, 0, 255],
         ],
-
-        // Purple shades for extreme reflectivity
         [
           [65, 70],
           [255, 0, 255, 255],
@@ -156,15 +140,12 @@ const CONSTANTS = {
     },
   },
 
-  // Current layer (default to reflectivity)
   currentLayer: "REFLECTIVITY",
 
-  // Legacy support - keep these for backward compatibility
   get REFLECTIVITY_COLORMAP() {
     return this.LAYERS.REFLECTIVITY.colormap;
   },
 
-  // Map coordinates derived from BBOX
   get TARGET_BBOX() {
     const bbox = this.BBOX;
     return `${bbox.min_lon},${bbox.min_lat},${bbox.max_lon},${bbox.max_lat}`;
@@ -173,28 +154,19 @@ const CONSTANTS = {
   get MAP_IMAGE_COORDINATES() {
     const bbox = this.BBOX;
     return [
-      [bbox.min_lon, bbox.max_lat], // Upper Left
-      [bbox.max_lon, bbox.max_lat], // Upper Right
-      [bbox.max_lon, bbox.min_lat], // Lower Right
-      [bbox.min_lon, bbox.min_lat], // Lower Left
+      [bbox.min_lon, bbox.max_lat],
+      [bbox.max_lon, bbox.max_lat],
+      [bbox.max_lon, bbox.min_lat],
+      [bbox.min_lon, bbox.min_lat],
     ];
   },
 };
 
-/**
- * Formats a date string by removing hyphens
- * @param {string} dateString - Date in YYYY-MM-DD format
- * @returns {string} Date in YYYYMMDD format or empty string if invalid
- */
 function formatDate(dateString) {
   if (!dateString) return "";
   return dateString.replace(/-/g, "");
 }
 
-/**
- * Sets default date to today
- * @param {HTMLInputElement} datePicker - Date input element
- */
 function setDefaultDate(datePicker) {
   const today = new Date();
   const yyyy = today.getFullYear();
@@ -203,26 +175,14 @@ function setDefaultDate(datePicker) {
   datePicker.value = `${yyyy}-${mm}-${dd}`;
 }
 
-/**
- * Formats an hour number as a string in the format "tXXz"
- * @param {number} hourNumber - Hour (0-23)
- * @returns {string} Formatted hour string (e.g., "t05z")
- */
 function formatHour(hourNumber) {
   const hourString = String(hourNumber).padStart(2, "0");
   return `t${hourString}z`;
 }
 
-/**
- * Converts a local date and hour to UTC
- * @param {string} dateStr - Date in YYYY-MM-DD format
- * @param {number} localHour - Hour in local timezone (0-23)
- * @returns {Object} Object with utcDate (YYYYMMDD) and utcHour (0-23)
- */
 function convertLocalToUTC(dateStr, localHour) {
   const [year, month, day] = dateStr.split("-");
   const localDate = new Date(year, month - 1, day, localHour);
-
   const utcDate = new Date(
     localDate.getTime() + localDate.getTimezoneOffset() * 60000,
   );
@@ -238,12 +198,6 @@ function convertLocalToUTC(dateStr, localHour) {
   };
 }
 
-/**
- * Converts UTC date and hour to local timezone
- * @param {string} utcDateStr - Date in YYYYMMDD format
- * @param {number} utcHour - Hour in UTC (0-23)
- * @returns {Object} Object with localDate (YYYY-MM-DD) and localHour (0-23)
- */
 function convertUTCToLocal(utcDateStr, utcHour) {
   const year = utcDateStr.substring(0, 4);
   const month = utcDateStr.substring(4, 6);
@@ -264,20 +218,11 @@ function convertUTCToLocal(utcDateStr, utcHour) {
   };
 }
 
-/**
- * Formats an hour number for display in local timezone
- * @param {number} hourNumber - Hour (0-23)
- * @returns {string} Formatted hour string in 24-hour format
- */
 function formatLocalHour(hourNumber) {
   const hourString = String(hourNumber).padStart(2, "0");
   return `${hourString}:00`;
 }
 
-/**
- * Gets the user's timezone abbreviation
- * @returns {string} Timezone abbreviation (e.g., "PST", "EST")
- */
 function getTimezoneAbbreviation() {
   const date = new Date();
   const timeZone = Intl.DateTimeFormat().resolvedOptions().timeZone;
@@ -292,43 +237,24 @@ function getTimezoneAbbreviation() {
       .pop();
     return shortName;
   } catch (e) {
-    // Fallback to offset
     const offset = -date.getTimezoneOffset() / 60;
     const sign = offset >= 0 ? "+" : "-";
     return `UTC${sign}${Math.abs(offset)}`;
   }
 }
 
-/**
- * Encodes the colormap for the current layer for use in a URL
- * @param {string} layerKey - The layer key (e.g., 'REFLECTIVITY', 'MASSDEN')
- * @returns {string} URL-encoded colormap parameter
- */
 function encodeColormapForUrl(layerKey = CONSTANTS.currentLayer) {
-  // Get the colormap for the specified layer
   const layer = CONSTANTS.LAYERS[layerKey];
   if (!layer || !layer.colormap) {
     console.warn(`Layer ${layerKey} not found, using default`);
     return encodeColormapForUrl("REFLECTIVITY");
   }
 
-  // Convert the colormap to the format expected by TiTiler
   const colormapJson = JSON.stringify(layer.colormap);
-
-  // First encode as URI component
   const encodedColormap = encodeURIComponent(colormapJson);
-
-  // Return as a URL parameter
   return `colormap=${encodedColormap}`;
 }
 
-/**
- * Builds the TiTiler URL to fetch a PNG cropped to a specific bounding box
- * @param {string} dateStrYYYYMMDD - Date in YYYYMMDD format
- * @param {string} hourStrTXXz - Hour in tXXz format
- * @param {string} layerKey - The layer key (e.g., 'REFLECTIVITY', 'MASSDEN')
- * @returns {string|null} Complete URL for the TiTiler request or null if invalid inputs
- */
 function buildImageUrl(
   dateStrYYYYMMDD,
   hourStrTXXz,
@@ -339,31 +265,21 @@ function buildImageUrl(
     return null;
   }
 
-  // Get the layer configuration
   const layer = CONSTANTS.LAYERS[layerKey];
   if (!layer) {
     console.warn(`Layer ${layerKey} not found, using default`);
     return buildImageUrl(dateStrYYYYMMDD, hourStrTXXz, "REFLECTIVITY");
   }
 
-  // Create the correct S3 URL with proper encoding for the VRT parameter
   const gribUrl = `https://noaa-hrrr-bdp-pds.s3.amazonaws.com/hrrr.${dateStrYYYYMMDD}/conus/hrrr.${hourStrTXXz}.wrfsfcf00.grib2`;
   const encodedVrtUrl = encodeURIComponent(
     `vrt://${gribUrl}?bands=${layer.band}`,
   );
-
-  // Build parameters
   const colormapParam = encodeColormapForUrl(layerKey);
 
-  // Build the final TiTiler URL
   return `${CONSTANTS.TITILER_BASE_URL}/external/bbox/${CONSTANTS.TARGET_BBOX}.png?url=${encodedVrtUrl}&${colormapParam}&dst_crs=epsg:3857`;
 }
 
-/**
- * Checks if the browser is likely to have cached an image
- * @param {string} url - URL of the image to check
- * @returns {Promise<boolean>} Promise resolving to true if image is likely cached
- */
 async function isImageCached(url) {
   try {
     const cache = await caches.open("hrrr-cache");
