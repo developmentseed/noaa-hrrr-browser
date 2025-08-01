@@ -64,10 +64,48 @@ body,
 }
 
 #loading-indicator {
+  margin-top: 10px;
+  padding: 10px;
+  background-color: #f0f8ff;
+  border: 1px solid #4a90e2;
+  border-radius: 4px;
+  font-size: 12px;
+  color: #333;
+  display: none;
+  text-align: center;
+  position: relative;
+}
+
+#loading-indicator.active {
+  display: block;
+}
+
+.loading-spinner {
+  width: 20px;
+  height: 20px;
+  border: 2px solid #e3e3e3;
+  border-top: 2px solid #4a90e2;
+  border-radius: 50%;
+  animation: spin 1s linear infinite;
+  display: inline-block;
+  margin-right: 8px;
+  vertical-align: middle;
+}
+
+@keyframes spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.loading-text {
+  vertical-align: middle;
+  font-weight: 500;
+}
+
+.loading-progress {
   margin-top: 5px;
-  font-style: italic;
-  color: #555;
-  display: none; /* Hidden by default */
+  font-size: 11px;
+  color: #666;
 }
 
 /* Info Button Styling */

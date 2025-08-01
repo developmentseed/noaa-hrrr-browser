@@ -32,33 +32,15 @@ function handleMapError(e) {
     );
 
     const loadingIndicator = document.getElementById("loading-indicator");
-    loadingIndicator.textContent =
+    const loadingText = loadingIndicator.querySelector(".loading-text");
+    const loadingProgress = loadingIndicator.querySelector(".loading-progress");
+
+    loadingText.textContent =
       "Error loading weather data. Please try a different date or hour.";
-    loadingIndicator.style.display = "block";
+    loadingProgress.textContent = "";
+    loadingIndicator.classList.add("active");
     isLayerInitialized = false;
   }
-}
-
-function cacheImage(imageUrl) {
-  fetch(imageUrl, {
-    method: "GET",
-    mode: "cors",
-    cache: "default",
-  })
-    .then((response) => {
-      if (!response.ok) {
-        console.warn(
-          `Failed to cache image: ${response.status} ${response.statusText}`,
-        );
-      } else {
-        console.log(`Successfully cached image: ${imageUrl}`);
-      }
-    })
-    .catch((error) => {
-      if (error.name !== "AbortError") {
-        console.warn(`Error caching image: ${imageUrl}`, error);
-      }
-    });
 }
 
 async function preCacheImagesForLocalDate(localDateStr) {
@@ -68,14 +50,20 @@ async function preCacheImagesForLocalDate(localDateStr) {
   }
 
   const loadingIndicator = document.getElementById("loading-indicator");
-  loadingIndicator.style.display = "block";
-  loadingIndicator.textContent = "Pre-fetching images...";
+  const loadingText = loadingIndicator.querySelector(".loading-text");
+  const loadingProgress = loadingIndicator.querySelector(".loading-progress");
+
+  loadingText.textContent = "Loading...";
+  loadingProgress.textContent = "";
+  loadingIndicator.classList.add("active");
 
   cachedHours.clear();
   cachedHoursOrder = [];
 
   const cachePromises = [];
   const utcDateHours = new Map();
+  let completedRequests = 0;
+  let totalRequests = 0;
 
   for (let localHour = 0; localHour < 24; localHour++) {
     const utcInfo = convertLocalToUTC(localDateStr, localHour);
@@ -96,12 +84,16 @@ async function preCacheImagesForLocalDate(localDateStr) {
       );
 
       if (imageUrl) {
+        totalRequests++;
         const cachePromise = fetch(imageUrl, {
           method: "GET",
           mode: "cors",
           cache: "default",
         })
           .then((response) => {
+            completedRequests++;
+            loadingProgress.textContent = `Loading... ${completedRequests}/${totalRequests} images cached`;
+
             if (response.ok) {
               cachedHours.add(hour);
               cachedHoursOrder.push(hour);
@@ -109,6 +101,8 @@ async function preCacheImagesForLocalDate(localDateStr) {
             return response;
           })
           .catch((error) => {
+            completedRequests++;
+            loadingProgress.textContent = `Loading... ${completedRequests}/${totalRequests} images cached`;
             console.warn(
               `Error pre-caching hour ${hour} for layer ${CONSTANTS.currentLayer}:`,
               error,
@@ -129,7 +123,7 @@ async function preCacheImagesForLocalDate(localDateStr) {
     console.warn("Error during pre-caching:", error);
   }
 
-  loadingIndicator.style.display = "none";
+  loadingIndicator.classList.remove("active");
 }
 
 function getMostRecentCachedHour() {
@@ -162,6 +156,9 @@ function getNearestCachedHour(targetHour) {
 function displayImageForHour(dateStrYYYYMMDD, hourValue) {
   const hourStrTXXz = formatHour(hourValue);
   const loadingIndicator = document.getElementById("loading-indicator");
+  const loadingText = loadingIndicator.querySelector(".loading-text");
+  const loadingProgress = loadingIndicator.querySelector(".loading-progress");
+
   const imageUrl = buildImageUrl(
     dateStrYYYYMMDD,
     hourStrTXXz,
@@ -170,15 +167,16 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
 
   if (!imageUrl) {
     console.error("Could not generate image URL");
-    loadingIndicator.style.display = "none";
+    loadingIndicator.classList.remove("active");
     return;
   }
 
   const isCached = cachedHours.has(hourValue);
 
   if (!isCached) {
-    loadingIndicator.style.display = "block";
-    loadingIndicator.textContent = "Loading...";
+    loadingText.textContent = "Loading hour data...";
+    loadingProgress.textContent = `Fetching data for hour ${hourValue}`;
+    loadingIndicator.classList.add("active");
     cachedHours.add(hourValue);
   }
 
@@ -230,15 +228,16 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
         isLayerInitialized = true;
       }
 
-      loadingIndicator.style.display = "none";
+      loadingIndicator.classList.remove("active");
       setTimeout(() => URL.revokeObjectURL(objectUrl), 1000);
     })
     .catch((error) => {
       if (error.name !== "AbortError") {
         console.error("Error loading image:", error);
-        loadingIndicator.textContent = "Error loading data. Please try again.";
+        loadingText.textContent = "Error loading data. Please try again.";
+        loadingProgress.textContent = "";
       } else {
-        loadingIndicator.style.display = "none";
+        loadingIndicator.classList.remove("active");
       }
     });
 }

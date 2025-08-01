@@ -51,7 +51,11 @@
           step="1"
           value="0"
         />
-        <div id="loading-indicator">Pre-fetching images...</div>
+        <div id="loading-indicator">
+          <div class="loading-spinner"></div>
+          <span class="loading-text">Loading...</span>
+          <div class="loading-progress"></div>
+        </div>
       </div>
     </div>
 
@@ -93,6 +97,12 @@
           </p>
 
           <p>
+            Smoke mass density values are shown with values ranging from light
+            blue (low smoke concentration) to purple (extreme smoke
+            concentration).
+          </p>
+
+          <p>
             Data is sourced from NOAA's public S3 bucket and rendered using
             TiTiler.
           </p>
@@ -120,7 +130,7 @@
     </a>
 
     <!-- Load configuration -->
-    <script src="map-settings.24cf0195350e0ee3.js"></script>
+    <script src="map-settings.cb9e394d4703187a.js"></script>
 
     <!-- Load application scripts -->
     <script src="js/utils.js"></script>

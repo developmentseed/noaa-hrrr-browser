@@ -290,3 +290,53 @@ async function isImageCached(url) {
     return false;
   }
 }
+
+function getUrlParams() {
+  const params = new URLSearchParams(window.location.search);
+  return {
+    date: params.get('date'),
+    hour: params.get('hour'),
+    layer: params.get('layer')
+  };
+}
+
+function updateUrlParams(date, hour, layer, replace = false) {
+  const params = new URLSearchParams();
+  
+  if (date) params.set('date', date);
+  if (hour !== null && hour !== undefined) params.set('hour', hour.toString());
+  if (layer) params.set('layer', layer);
+  
+  const newUrl = `${window.location.pathname}?${params.toString()}`;
+  
+  if (replace) {
+    window.history.replaceState({}, '', newUrl);
+  } else {
+    window.history.pushState({}, '', newUrl);
+  }
+}
+
+function getStateFromUrl() {
+  const urlParams = getUrlParams();
+  const state = {};
+  
+  if (urlParams.date) {
+    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
+    if (dateRegex.test(urlParams.date)) {
+      state.date = urlParams.date;
+    }
+  }
+  
+  if (urlParams.hour) {
+    const hour = parseInt(urlParams.hour, 10);
+    if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+      state.hour = hour;
+    }
+  }
+  
+  if (urlParams.layer && CONSTANTS.LAYERS[urlParams.layer]) {
+    state.layer = urlParams.layer;
+  }
+  
+  return state;
+}

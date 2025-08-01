@@ -10,11 +10,79 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 function initializeApp() {
-  setDefaultDate(datePicker);
   initializeTimezoneDisplay();
   initializeModal();
+  initializeStateFromUrl();
   setupEventListeners();
   loadInitialData();
+}
+
+function initializeStateFromUrl() {
+  const urlState = getStateFromUrl();
+  
+  if (urlState.layer) {
+    CONSTANTS.currentLayer = urlState.layer;
+    layerSelector.value = urlState.layer;
+    updateLayerDescription(urlState.layer);
+  }
+  
+  if (urlState.date) {
+    datePicker.value = urlState.date;
+  } else {
+    setDefaultDate(datePicker);
+  }
+  
+  if (urlState.hour !== undefined) {
+    hourSlider.value = urlState.hour;
+    document.getElementById("hour-value-display").textContent = formatLocalHour(urlState.hour);
+  }
+  
+  syncUrlWithCurrentState(true);
+}
+
+function syncUrlWithCurrentState(replace = false) {
+  const date = datePicker.value;
+  const hour = parseInt(hourSlider.value, 10);
+  const layer = CONSTANTS.currentLayer;
+  
+  updateUrlParams(date, hour, layer, replace);
+}
+
+async function handlePopState(event) {
+  const urlState = getStateFromUrl();
+  let shouldReload = false;
+  
+  if (urlState.layer && urlState.layer !== CONSTANTS.currentLayer) {
+    CONSTANTS.currentLayer = urlState.layer;
+    layerSelector.value = urlState.layer;
+    updateLayerDescription(urlState.layer);
+    resetLayer();
+    shouldReload = true;
+  }
+  
+  if (urlState.date && urlState.date !== datePicker.value) {
+    datePicker.value = urlState.date;
+    shouldReload = true;
+  }
+  
+  if (urlState.hour !== undefined && urlState.hour !== parseInt(hourSlider.value, 10)) {
+    hourSlider.value = urlState.hour;
+    document.getElementById("hour-value-display").textContent = formatLocalHour(urlState.hour);
+    shouldReload = true;
+  }
+  
+  if (shouldReload) {
+    const currentLocalDate = datePicker.value;
+    const currentLocalHour = parseInt(hourSlider.value, 10);
+    
+    if (currentLocalDate) {
+      await preCacheImagesForLocalDate(currentLocalDate);
+      const utcInfo = convertLocalToUTC(currentLocalDate, currentLocalHour);
+      const mostRecentHour = getMostRecentCachedHour();
+      const hourToUse = mostRecentHour !== null ? mostRecentHour : utcInfo.utcHour;
+      displayImageForHour(utcInfo.utcDate, hourToUse);
+    }
+  }
 }
 
 function initializeTimezoneDisplay() {
@@ -23,11 +91,14 @@ function initializeTimezoneDisplay() {
 }
 
 function setupEventListeners() {
+  window.addEventListener('popstate', handlePopState);
+  
   layerSelector.addEventListener("change", async (e) => {
     const selectedLayer = e.target.value;
     CONSTANTS.currentLayer = selectedLayer;
     updateLayerDescription(selectedLayer);
     resetLayer();
+    syncUrlWithCurrentState();
 
     const currentLocalDate = datePicker.value;
     const currentLocalHour = parseInt(hourSlider.value, 10);
@@ -45,6 +116,7 @@ function setupEventListeners() {
   datePicker.addEventListener("change", async (e) => {
     const selectedLocalDate = e.target.value;
     const currentLocalHour = parseInt(hourSlider.value, 10);
+    syncUrlWithCurrentState();
 
     if (selectedLocalDate) {
       resetLayer();
@@ -59,6 +131,7 @@ function setupEventListeners() {
         hourSlider.value = localInfo.localHour;
         document.getElementById("hour-value-display").textContent =
           formatLocalHour(localInfo.localHour);
+        syncUrlWithCurrentState();
       }
 
       displayImageForHour(utcInfo.utcDate, hourToUse);
@@ -81,6 +154,7 @@ function setupEventListeners() {
 
       document.getElementById("hour-value-display").textContent =
         formatLocalHour(localHourToUse);
+      syncUrlWithCurrentState();
 
       if (currentLocalDate) {
         displayImageForHour(utcInfo.utcDate, nearestCachedHour);
@@ -88,6 +162,7 @@ function setupEventListeners() {
     } else {
       document.getElementById("hour-value-display").textContent =
         formatLocalHour(requestedLocalHour);
+      syncUrlWithCurrentState();
     }
   });
 }
