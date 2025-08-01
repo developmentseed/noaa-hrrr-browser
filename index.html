@@ -4,7 +4,7 @@
     <title>NOAA HRRR Browser</title>
     <meta
       property="og:description"
-      content="Browse real-time (FH0) reflectivity values from the NOAA HRRR forecast dataset"
+      content="Browse near-real-time (FH0) data from the NOAA HRRR forecast dataset"
     />
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
@@ -17,6 +17,23 @@
   </head>
   <body>
     <div id="map"></div>
+
+    <!-- Legend -->
+    <div id="legend" class="legend">
+      <div class="legend-header">
+        <span id="legend-title"></span>
+        <span id="legend-units"></span>
+      </div>
+      <div class="legend-scale">
+        <div id="legend-gradient" class="legend-gradient"></div>
+        <div class="legend-labels">
+          <div class="legend-label-container">
+            <span id="legend-min"></span>
+            <span id="legend-max"></span>
+          </div>
+        </div>
+      </div>
+    </div>
 
     <div class="map-overlay top">
       <div class="map-overlay-inner">
@@ -37,7 +54,16 @@
         </select>
 
         <label for="date-picker">Date:</label>
-        <input type="date" id="date-picker" name="trip-start" />
+        <div class="date-controls">
+          <input type="date" id="date-picker" name="trip-start" />
+          <button
+            id="refresh-button"
+            class="refresh-button"
+            title="Refresh to latest available data"
+          >
+            latest
+          </button>
+        </div>
 
         <label for="hour-slider">
           Local time (<span id="timezone-display">UTC</span>):
@@ -135,6 +161,7 @@
     <!-- Load application scripts -->
     <script src="js/utils.js"></script>
     <script src="js/map.js"></script>
+    <script src="js/legend.js"></script>
     <script src="js/modal.js"></script>
     <script src="js/main.js"></script>
   </body>

@@ -142,55 +142,37 @@ const CONSTANTS = {
 
   currentLayer: "REFLECTIVITY",
 
-  get REFLECTIVITY_COLORMAP() {
-    return this.LAYERS.REFLECTIVITY.colormap;
-  },
-
   get TARGET_BBOX() {
-    const bbox = this.BBOX;
-    return `${bbox.min_lon},${bbox.min_lat},${bbox.max_lon},${bbox.max_lat}`;
+    return `${this.BBOX.min_lon},${this.BBOX.min_lat},${this.BBOX.max_lon},${this.BBOX.max_lat}`;
   },
 
   get MAP_IMAGE_COORDINATES() {
-    const bbox = this.BBOX;
     return [
-      [bbox.min_lon, bbox.max_lat],
-      [bbox.max_lon, bbox.max_lat],
-      [bbox.max_lon, bbox.min_lat],
-      [bbox.min_lon, bbox.min_lat],
+      [this.BBOX.min_lon, this.BBOX.max_lat],
+      [this.BBOX.max_lon, this.BBOX.max_lat],
+      [this.BBOX.max_lon, this.BBOX.min_lat],
+      [this.BBOX.min_lon, this.BBOX.min_lat],
     ];
   },
 };
 
-function formatDate(dateString) {
-  if (!dateString) return "";
-  return dateString.replace(/-/g, "");
-}
+const formatDate = (dateString) => dateString?.replace(/-/g, "") || "";
 
 function setDefaultDate(datePicker) {
   const today = new Date();
-  const yyyy = today.getFullYear();
-  const mm = String(today.getMonth() + 1).padStart(2, "0");
-  const dd = String(today.getDate()).padStart(2, "0");
-  datePicker.value = `${yyyy}-${mm}-${dd}`;
+  datePicker.value = today.toISOString().split('T')[0];
 }
 
-function formatHour(hourNumber) {
-  const hourString = String(hourNumber).padStart(2, "0");
-  return `t${hourString}z`;
-}
+const formatHour = (hourNumber) => `t${String(hourNumber).padStart(2, "0")}z`;
 
 function convertLocalToUTC(dateStr, localHour) {
   const [year, month, day] = dateStr.split("-");
   const localDate = new Date(year, month - 1, day, localHour);
-  const utcDate = new Date(
-    localDate.getTime() + localDate.getTimezoneOffset() * 60000,
-  );
-
-  const utcYear = utcDate.getFullYear();
-  const utcMonth = String(utcDate.getMonth() + 1).padStart(2, "0");
-  const utcDay = String(utcDate.getDate()).padStart(2, "0");
-  const utcHour = utcDate.getHours();
+  
+  const utcYear = localDate.getUTCFullYear();
+  const utcMonth = String(localDate.getUTCMonth() + 1).padStart(2, "0");
+  const utcDay = String(localDate.getUTCDate()).padStart(2, "0");
+  const utcHour = localDate.getUTCHours();
 
   return {
     utcDate: `${utcYear}${utcMonth}${utcDay}`,
@@ -218,10 +200,7 @@ function convertUTCToLocal(utcDateStr, utcHour) {
   };
 }
 
-function formatLocalHour(hourNumber) {
-  const hourString = String(hourNumber).padStart(2, "0");
-  return `${hourString}:00`;
-}
+const formatLocalHour = (hourNumber) => `${String(hourNumber).padStart(2, "0")}:00`;
 
 function getTimezoneAbbreviation() {
   const date = new Date();
@@ -244,15 +223,8 @@ function getTimezoneAbbreviation() {
 }
 
 function encodeColormapForUrl(layerKey = CONSTANTS.currentLayer) {
-  const layer = CONSTANTS.LAYERS[layerKey];
-  if (!layer || !layer.colormap) {
-    console.warn(`Layer ${layerKey} not found, using default`);
-    return encodeColormapForUrl("REFLECTIVITY");
-  }
-
-  const colormapJson = JSON.stringify(layer.colormap);
-  const encodedColormap = encodeURIComponent(colormapJson);
-  return `colormap=${encodedColormap}`;
+  const layer = CONSTANTS.LAYERS[layerKey] || CONSTANTS.LAYERS.REFLECTIVITY;
+  return `colormap=${encodeURIComponent(JSON.stringify(layer.colormap))}`;
 }
 
 function buildImageUrl(
@@ -280,16 +252,6 @@ function buildImageUrl(
   return `${CONSTANTS.TITILER_BASE_URL}/external/bbox/${CONSTANTS.TARGET_BBOX}.png?url=${encodedVrtUrl}&${colormapParam}&dst_crs=epsg:3857`;
 }
 
-async function isImageCached(url) {
-  try {
-    const cache = await caches.open("hrrr-cache");
-    const cachedResponse = await cache.match(url);
-    return !!cachedResponse;
-  } catch (e) {
-    console.warn("Cache API access failed, using tracked cache state");
-    return false;
-  }
-}
 
 function getUrlParams() {
   const params = new URLSearchParams(window.location.search);
@@ -307,31 +269,21 @@ function updateUrlParams(date, hour, layer, replace = false) {
   if (hour !== null && hour !== undefined) params.set('hour', hour.toString());
   if (layer) params.set('layer', layer);
   
-  const newUrl = `${window.location.pathname}?${params.toString()}`;
-  
-  if (replace) {
-    window.history.replaceState({}, '', newUrl);
-  } else {
-    window.history.pushState({}, '', newUrl);
-  }
+  const method = replace ? 'replaceState' : 'pushState';
+  window.history[method]({}, '', `${window.location.pathname}?${params.toString()}`);
 }
 
 function getStateFromUrl() {
   const urlParams = getUrlParams();
   const state = {};
   
-  if (urlParams.date) {
-    const dateRegex = /^\d{4}-\d{2}-\d{2}$/;
-    if (dateRegex.test(urlParams.date)) {
-      state.date = urlParams.date;
-    }
+  if (urlParams.date && /^\d{4}-\d{2}-\d{2}$/.test(urlParams.date)) {
+    state.date = urlParams.date;
   }
   
-  if (urlParams.hour) {
-    const hour = parseInt(urlParams.hour, 10);
-    if (!isNaN(hour) && hour >= 0 && hour <= 23) {
-      state.hour = hour;
-    }
+  const hour = parseInt(urlParams.hour, 10);
+  if (!isNaN(hour) && hour >= 0 && hour <= 23) {
+    state.hour = hour;
   }
   
   if (urlParams.layer && CONSTANTS.LAYERS[urlParams.layer]) {
