@@ -51,7 +51,11 @@
           step="1"
           value="0"
         />
-        <div id="loading-indicator">Pre-fetching images...</div>
+        <div id="loading-indicator">
+          <div class="loading-spinner"></div>
+          <span class="loading-text">Loading...</span>
+          <div class="loading-progress"></div>
+        </div>
       </div>
     </div>
 
@@ -90,6 +94,12 @@
           <p>
             Reflectivity values are shown with colors ranging from light blue
             (weak returns) to purple (extreme precipitation).
+          </p>
+
+          <p>
+            Smoke mass density values are shown with values ranging from light
+            blue (low smoke concentration) to purple (extreme smoke
+            concentration).
           </p>
 
           <p>
