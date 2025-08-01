@@ -1,6 +1,7 @@
 const datePicker = document.getElementById("date-picker");
 const hourSlider = document.getElementById("hour-slider");
 const layerSelector = document.getElementById("layer-selector");
+const refreshButton = document.getElementById("refresh-button");
 document.addEventListener("DOMContentLoaded", () => {
   // Initialize the map
   map = initializeMap();
@@ -12,6 +13,7 @@ document.addEventListener("DOMContentLoaded", () => {
 function initializeApp() {
   initializeTimezoneDisplay();
   initializeModal();
+  initializeLegend();
   initializeStateFromUrl();
   setupEventListeners();
   loadInitialData();
@@ -24,6 +26,7 @@ function initializeStateFromUrl() {
     CONSTANTS.currentLayer = urlState.layer;
     layerSelector.value = urlState.layer;
     updateLayerDescription(urlState.layer);
+    updateLegend(urlState.layer);
   }
   
   if (urlState.date) {
@@ -56,6 +59,7 @@ async function handlePopState(event) {
     CONSTANTS.currentLayer = urlState.layer;
     layerSelector.value = urlState.layer;
     updateLayerDescription(urlState.layer);
+    updateLegend(urlState.layer);
     resetLayer();
     shouldReload = true;
   }
@@ -93,10 +97,15 @@ function initializeTimezoneDisplay() {
 function setupEventListeners() {
   window.addEventListener('popstate', handlePopState);
   
+  refreshButton.addEventListener("click", async () => {
+    await refreshToLatestData();
+  });
+  
   layerSelector.addEventListener("change", async (e) => {
     const selectedLayer = e.target.value;
     CONSTANTS.currentLayer = selectedLayer;
     updateLayerDescription(selectedLayer);
+    updateLegend(selectedLayer);
     resetLayer();
     syncUrlWithCurrentState();
 
@@ -189,6 +198,84 @@ async function loadInitialData() {
     }
 
     displayImageForHour(utcInfo.utcDate, hourToUse);
+  }
+}
+
+async function refreshToLatestData() {
+  // Set to current date using existing function
+  setDefaultDate(datePicker);
+  
+  const currentLocalDate = datePicker.value;
+  
+  // Pre-cache images first to determine what data is actually available
+  resetLayer();
+  await preCacheImagesForLocalDate(currentLocalDate);
+  
+  // Find the actual latest available hour based on current time
+  const now = new Date();
+  const currentUtcHour = now.getUTCHours();
+  
+  // Get all cached hours and find the most recent one that's <= current UTC hour
+  const allCachedHours = Array.from(cachedHours).sort((a, b) => b - a); // Sort descending
+  let latestAvailableUtcHour = null;
+  
+  // Look for the most recent hour that's available and <= current UTC hour
+  for (const utcHour of allCachedHours) {
+    if (utcHour <= currentUtcHour) {
+      latestAvailableUtcHour = utcHour;
+      break;
+    }
+  }
+  
+  // If no hour found <= current time, take the most recent available from yesterday
+  if (latestAvailableUtcHour === null && allCachedHours.length > 0) {
+    latestAvailableUtcHour = allCachedHours[0]; // Most recent hour available
+  }
+  
+  console.log("Current UTC hour:", currentUtcHour);
+  console.log("Latest available UTC hour:", latestAvailableUtcHour);
+  
+  if (latestAvailableUtcHour !== null) {
+    // Find the correct UTC date and local hour for this UTC hour
+    let correctUtcDate = null;
+    let correctLocalHour = null;
+    
+    for (let localHour = 0; localHour < 24; localHour++) {
+      const utcInfo = convertLocalToUTC(currentLocalDate, localHour);
+      if (utcInfo.utcHour === latestAvailableUtcHour) {
+        correctUtcDate = utcInfo.utcDate;
+        correctLocalHour = localHour;
+        console.log(`Found match: Local ${localHour}:00 on ${currentLocalDate} = UTC ${latestAvailableUtcHour}:00 on ${correctUtcDate}`);
+        break;
+      }
+    }
+    
+    if (correctUtcDate && correctLocalHour !== null) {
+      // Update the UI with the actual latest available time
+      hourSlider.value = correctLocalHour;
+      document.getElementById("hour-value-display").textContent = formatLocalHour(correctLocalHour);
+      
+      syncUrlWithCurrentState();
+      
+      // Display the image for this hour
+      displayImageForHour(correctUtcDate, latestAvailableUtcHour);
+    } else {
+      console.log("No matching local hour found for UTC hour", latestAvailableUtcHour);
+      // Fallback: use current local time properly
+      const currentLocalHour = now.getHours();
+      hourSlider.value = currentLocalHour;
+      document.getElementById("hour-value-display").textContent = formatLocalHour(currentLocalHour);
+      syncUrlWithCurrentState();
+      await loadInitialData();
+    }
+  } else {
+    console.log("No cached hours found");
+    // Fallback to current time if no data is cached
+    const currentLocalHour = now.getHours();
+    hourSlider.value = currentLocalHour;
+    document.getElementById("hour-value-display").textContent = formatLocalHour(currentLocalHour);
+    syncUrlWithCurrentState();
+    await loadInitialData();
   }
 }
 

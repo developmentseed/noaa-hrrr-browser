@@ -4,7 +4,6 @@ const HRRR_LAYER_ID = "hrrr-image-layer";
 let map;
 let isLayerInitialized = false;
 let cachedHours = new Set();
-let cachedHoursOrder = [];
 let currentAbortController = null;
 
 function initializeMap() {
@@ -58,7 +57,6 @@ async function preCacheImagesForLocalDate(localDateStr) {
   loadingIndicator.classList.add("active");
 
   cachedHours.clear();
-  cachedHoursOrder = [];
 
   const cachePromises = [];
   const utcDateHours = new Map();
@@ -96,7 +94,9 @@ async function preCacheImagesForLocalDate(localDateStr) {
 
             if (response.ok) {
               cachedHours.add(hour);
-              cachedHoursOrder.push(hour);
+              console.log(`Successfully cached hour ${hour} UTC`);
+            } else {
+              console.log(`Hour ${hour} UTC: HTTP ${response.status} - data not available`);
             }
             return response;
           })
@@ -115,9 +115,10 @@ async function preCacheImagesForLocalDate(localDateStr) {
   }
 
   try {
+    // Wait for all requests to complete (up to 30 seconds) to get accurate availability data
     await Promise.race([
-      Promise.all(cachePromises.slice(0, 5)),
-      new Promise((resolve) => setTimeout(resolve, 8000)),
+      Promise.all(cachePromises),
+      new Promise((resolve) => setTimeout(resolve, 30000)),
     ]);
   } catch (error) {
     console.warn("Error during pre-caching:", error);
@@ -127,10 +128,17 @@ async function preCacheImagesForLocalDate(localDateStr) {
 }
 
 function getMostRecentCachedHour() {
-  if (cachedHoursOrder.length === 0) {
+  if (cachedHours.size === 0) {
     return null;
   }
-  return Math.max(...cachedHoursOrder);
+  
+  // Return the highest available hour since TiTiler only returns 200 for existing data
+  const mostRecentHour = Math.max(...cachedHours);
+  
+  console.log(`Most recent cached hour: ${mostRecentHour} UTC`);
+  console.log(`All cached hours: ${Array.from(cachedHours).sort((a, b) => b - a).join(', ')}`);
+  
+  return mostRecentHour;
 }
 
 function getNearestCachedHour(targetHour) {
@@ -138,19 +146,9 @@ function getNearestCachedHour(targetHour) {
     return null;
   }
 
-  const cachedArray = Array.from(cachedHours).sort((a, b) => a - b);
-  let closest = cachedArray[0];
-  let minDiff = Math.abs(targetHour - closest);
-
-  for (const hour of cachedArray) {
-    const diff = Math.abs(targetHour - hour);
-    if (diff < minDiff) {
-      minDiff = diff;
-      closest = hour;
-    }
-  }
-
-  return closest;
+  return Array.from(cachedHours).reduce((closest, hour) => 
+    Math.abs(hour - targetHour) < Math.abs(closest - targetHour) ? hour : closest
+  );
 }
 
 function displayImageForHour(dateStrYYYYMMDD, hourValue) {
@@ -171,13 +169,10 @@ function displayImageForHour(dateStrYYYYMMDD, hourValue) {
     return;
   }
 
-  const isCached = cachedHours.has(hourValue);
-
-  if (!isCached) {
+  if (!cachedHours.has(hourValue)) {
     loadingText.textContent = "Loading hour data...";
     loadingProgress.textContent = `Fetching data for hour ${hourValue}`;
     loadingIndicator.classList.add("active");
-    cachedHours.add(hourValue);
   }
 
   if (currentAbortController) {
