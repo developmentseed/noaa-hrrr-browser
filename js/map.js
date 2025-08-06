@@ -96,7 +96,9 @@ async function preCacheImagesForLocalDate(localDateStr) {
               cachedHours.add(hour);
               console.log(`Successfully cached hour ${hour} UTC`);
             } else {
-              console.log(`Hour ${hour} UTC: HTTP ${response.status} - data not available`);
+              console.log(
+                `Hour ${hour} UTC: HTTP ${response.status} - data not available`,
+              );
             }
             return response;
           })
@@ -115,10 +117,9 @@ async function preCacheImagesForLocalDate(localDateStr) {
   }
 
   try {
-    // Wait for all requests to complete (up to 30 seconds) to get accurate availability data
     await Promise.race([
       Promise.all(cachePromises),
-      new Promise((resolve) => setTimeout(resolve, 30000)),
+      new Promise((resolve) => setTimeout(resolve, 30000)), // 30 seconds
     ]);
   } catch (error) {
     console.warn("Error during pre-caching:", error);
@@ -131,13 +132,16 @@ function getMostRecentCachedHour() {
   if (cachedHours.size === 0) {
     return null;
   }
-  
-  // Return the highest available hour since TiTiler only returns 200 for existing data
+
   const mostRecentHour = Math.max(...cachedHours);
-  
+
   console.log(`Most recent cached hour: ${mostRecentHour} UTC`);
-  console.log(`All cached hours: ${Array.from(cachedHours).sort((a, b) => b - a).join(', ')}`);
-  
+  console.log(
+    `All cached hours: ${Array.from(cachedHours)
+      .sort((a, b) => b - a)
+      .join(", ")}`,
+  );
+
   return mostRecentHour;
 }
 
@@ -146,8 +150,10 @@ function getNearestCachedHour(targetHour) {
     return null;
   }
 
-  return Array.from(cachedHours).reduce((closest, hour) => 
-    Math.abs(hour - targetHour) < Math.abs(closest - targetHour) ? hour : closest
+  return Array.from(cachedHours).reduce((closest, hour) =>
+    Math.abs(hour - targetHour) < Math.abs(closest - targetHour)
+      ? hour
+      : closest,
   );
 }
 
