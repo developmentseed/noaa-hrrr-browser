@@ -5,12 +5,12 @@ function createLegendGradient(colormap) {
     const percentage = (index / (colormap.length - 1)) * 100;
     return `rgba(${r}, ${g}, ${b}, ${a / 255}) ${percentage}%`;
   });
-  
-  return `linear-gradient(to right, ${gradientStops.join(', ')})`;
+
+  return `linear-gradient(to right, ${gradientStops.join(", ")})`;
 }
 
 function formatLegendValue(value, layerKey) {
-  if (layerKey === 'MASSDEN') {
+  if (layerKey === "MASSDEN") {
     if (value >= 1e-6) {
       return (value * 1e9).toFixed(0);
     } else {
@@ -33,15 +33,15 @@ function getLegendConfig(layerKey) {
   const maxValue = colormap[colormap.length - 1][0][1];
 
   let title, units;
-  if (layerKey === 'REFLECTIVITY') {
-    title = 'Composite Reflectivity';
-    units = '(dBZ)';
-  } else if (layerKey === 'MASSDEN') {
-    title = 'Smoke Mass Density';
-    units = '(μg/m³)';
+  if (layerKey === "REFLECTIVITY") {
+    title = "composite reflectivity";
+    units = "(dBZ)";
+  } else if (layerKey === "MASSDEN") {
+    title = "surface (8m) smoke mass density";
+    units = "(μg/m³)";
   } else {
-    title = layer.name || 'Unknown';
-    units = '';
+    title = layer.name || "Unknown";
+    units = "";
   }
 
   return {
@@ -49,7 +49,7 @@ function getLegendConfig(layerKey) {
     units,
     minValue: formatLegendValue(minValue, layerKey),
     maxValue: formatLegendValue(maxValue, layerKey),
-    gradient: createLegendGradient(colormap)
+    gradient: createLegendGradient(colormap),
   };
 }
 
@@ -57,11 +57,11 @@ function updateLegend(layerKey = CONSTANTS.currentLayer) {
   const legendConfig = getLegendConfig(layerKey);
   if (!legendConfig) return;
 
-  const titleElement = document.getElementById('legend-title');
-  const unitsElement = document.getElementById('legend-units');
-  const minElement = document.getElementById('legend-min');
-  const maxElement = document.getElementById('legend-max');
-  const gradientElement = document.getElementById('legend-gradient');
+  const titleElement = document.getElementById("legend-title");
+  const unitsElement = document.getElementById("legend-units");
+  const minElement = document.getElementById("legend-min");
+  const maxElement = document.getElementById("legend-max");
+  const gradientElement = document.getElementById("legend-gradient");
 
   titleElement.textContent = legendConfig.title;
   unitsElement.textContent = legendConfig.units;
@@ -73,3 +73,4 @@ function updateLegend(layerKey = CONSTANTS.currentLayer) {
 function initializeLegend() {
   updateLegend();
 }
+

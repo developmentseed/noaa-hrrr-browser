@@ -85,7 +85,6 @@
       </div>
     </div>
 
-    <!-- Info Modal -->
     <div id="info-modal" class="modal">
       <div class="modal-content">
         <span class="close-button">&times;</span>
@@ -99,22 +98,29 @@
 
           <h3>How to Use</h3>
           <ul>
-            <li>Select a <strong>date</strong> using the date picker</li>
+            <li>Select a <strong>layer</strong> from the dropdown menu</li>
             <li>
-              Use the <strong>hour slider</strong> to view data from different
-              times (displayed in your local timezone)
+              Select a <strong>date</strong> using the date picker (or click
+              'latest' to view the most recent available data)
             </li>
             <li>
-              The map displays composite reflectivity, which is useful for
-              tracking precipitation and storm intensity
+              Use the <strong>hour slider</strong> to view atmospheric
+              conditions at different times (displayed in your local timezone)
             </li>
           </ul>
 
           <h3>About the Data</h3>
           <p>
             The HRRR is a real-time 3km resolution, hourly updated atmospheric
-            model operated by NOAA. This browser displays the "FH0" data, which
-            represents the analysis time (not a forecast).
+            model operated by NOAA. This browser displays the "FH0" (forecast
+            hour zero) data, which represents the atmospheric conditions at the
+            time that the model run was initiated (not a forecast).
+          </p>
+
+          <p>
+            There is a 1-2 hour lag between when the model run begins to when
+            the data are available in cloud storage, so the latest available
+            image may be a few hours old.
           </p>
 
           <p>
@@ -136,7 +142,6 @@
       </div>
     </div>
 
-    <!-- GitHub Repository Link -->
     <a
       href="https://github.com/developmentseed/noaa-hrrr-browser"
       target="_blank"
@@ -155,10 +160,7 @@
       View on GitHub
     </a>
 
-    <!-- Load configuration -->
     <script src="config.js"></script>
-
-    <!-- Load application scripts -->
     <script src="js/utils.js"></script>
     <script src="js/map.js"></script>
     <script src="js/legend.js"></script>
